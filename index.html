@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>几何枪战 - 2D 多人联机</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="start-screen" class="screen">
+        <div class="start-content">
+            <div class="game-title">
+                <h1>几何枪战</h1>
+                <p class="subtitle">GEOMETRIC GUNFIGHT</p>
+            </div>
+            
+            <div class="start-options">
+                <div class="input-group">
+                    <label for="player-name">昵称</label>
+                    <input type="text" id="player-name" placeholder="输入你的游戏昵称" maxlength="12">
+                </div>
+                
+                <div class="input-group">
+                    <label for="room-id">房间ID</label>
+                    <input type="text" id="room-id" placeholder="输入房间ID (留空创建新房间)">
+                </div>
+                
+                <button id="btn-start" class="start-button">开始游戏</button>
+            </div>
+            
+            <div class="game-info">
+                <div class="info-section">
+                    <h3>🎮 游戏特色</h3>
+                    <ul>
+                        <li>• 3000x2000 大地图探索</li>
+                        <li>• 4种武器自由切换</li>
+                        <li>• 多人联机实时对战</li>
+                        <li>• 智能挂机模式</li>
+                        <li>• 实时聊天系统</li>
+                        <li>• 支持触屏操作</li>
+                    </ul>
+                </div>
+                
+                <div class="info-section">
+                    <h3>⌨️ 操作说明</h3>
+                    <ul>
+                        <li>• WASD / 方向键 - 移动</li>
+                        <li>• 鼠标 - 瞄准</li>
+                        <li>• 左键 - 射击</li>
+                        <li>• 1-4 - 切换武器</li>
+                        <li>• F - 切换挂机模式</li>
+                        <li>• Enter - 发送消息</li>
+                    </ul>
+                </div>
+            </div>
+            
+            <div class="footer">
+                <p>© 2026 几何枪战 - 自由创作游戏</p>
+            </div>
+        </div>
+    </div>
+    
+    <div id="game-screen" class="screen hidden">
+        <div class="hud">
+            <div class="hud-left">
+                <div class="health-bar">
+                    <span class="label">生命值</span>
+                    <div class="bar">
+                        <div id="health-fill" class="fill"></div>
+                    </div>
+                </div>
+                <div class="ammo">
+                    <span class="label">弹药</span>
+                    <span id="ammo-count">30</span>/30
+                </div>
+            </div>
+            <div class="hud-center">
+                <div class="score">
+                    <span class="label">击杀</span>
+                    <span id="kill-count">0</span>
+                </div>
+            </div>
+            <div class="hud-right">
+                <div id="auto-display" class="auto-display">✋ 手动</div>
+                <div id="room-display" class="room-display"></div>
+                <button id="btn-quit">退出</button>
+            </div>
+        </div>
+        <canvas id="gameCanvas"></canvas>
+        <div id="players-list" class="players-list"></div>
+        <div id="kill-feed" class="kill-feed"></div>
+        <div id="chat-container" class="chat-container">
+            <div id="chat-messages" class="chat-messages"></div>
+            <div class="chat-input-area">
+                <input type="text" id="chat-input" placeholder="按Enter发送消息...">
+                <button id="chat-emoji-btn">😊</button>
+                <div id="emoji-panel" class="emoji-panel hidden">
+                    <div class="emoji-grid">
+                        😀 😃 😄 😁 😆 😅 😂 🤣
+                        😇 😈 👿 👹 👺 💀 👻 👽
+                        🤖 💩 😺 😸 😹 😻 😼 😽
+                        🙀 😿 😾 🐱 🐭 🐹 🐰 🦊
+                        🐻 🐼 🐨 🐯 🦁 🐮 🐷 🐸
+                        🐵 🙈 🙉 🙊 🐔 🐧 🐦 🐤
+                        👍 👎 👌 ✌️ ✊ ✋ 🤛 🤜
+                        🤞 🤟 🤘 🤙 👀 👁️ 👅 👄
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div id="weapon-bar" class="weapon-bar">
+            <div id="weapon-0" class="weapon-slot active">1 🔫</div>
+            <div id="weapon-1" class="weapon-slot">2 🔥</div>
+            <div id="weapon-2" class="weapon-slot">3 💥</div>
+            <div id="weapon-3" class="weapon-slot">4 🎯</div>
+        </div>
+        
+        <!-- 触屏控制 -->
+        <div id="touch-controls" class="touch-controls">
+            <div id="joystick" class="joystick">
+                <div id="joystick-knob" class="joystick-knob"></div>
+            </div>
+            <button id="touch-shoot" class="touch-button shoot-button">🔫</button>
+            <button id="touch-f" class="touch-button f-button">F</button>
+        </div>
+    </div>
+    
+    <div id="gameover-screen" class="screen hidden">
+        <div class="gameover-content">
+            <h1>游戏结束</h1>
+            <div id="final-stats"></div>
+            <button id="btn-restart">再来一局</button>
+        </div>
+    </div>
+    
+    <script src="game.js"></script>
+    <script src="network.js"></script>
+</body>
+</html>

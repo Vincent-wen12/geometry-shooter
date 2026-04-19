@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: geometric-gunfight
+    env: node
+    buildCommand: npm install
+    startCommand: node server.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+    regions:
+      - singapore
+    plan: free

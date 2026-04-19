@@ -1,0 +1,16 @@
+{
+  "name": "geometric-design-game",
+  "version": "1.0.0",
+  "description": "2D Geometric Free Design Game with Multiplayer",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "keywords": ["game", "websocket", "multiplayer", "design"],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "ws": "^8.14.2"
+  }
+}
