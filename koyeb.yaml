@@ -1,0 +1,15 @@
+name: geometric-gunfight
+github:
+  repository: Vincent-wen12/geometry-shooter
+  branch: main
+  autodeploy: true
+health_check:
+  enabled: true
+  path: /
+  port: 3000
+ports:
+  - port: 3000
+    protocol: http
+  - port: 3000
+    protocol: tcp
+    tls: false
