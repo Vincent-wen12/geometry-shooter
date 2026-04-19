@@ -25,7 +25,15 @@ class Game {
         this.mapHeight = 2000;
         this.cameraX = 0;
         this.cameraY = 0;
-        this.cameraSpeed = 10;
+        this.cameraSpeed = 0.1; // 平滑相机
+        this.targetCameraX = 0;
+        this.targetCameraY = 0;
+        
+        // 设备检测
+        this.isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        
+        // 性能优化
+        this.maxParticles = 300; // 最大粒子数
         
         this.colors = [
             '#667eea', '#f093fb', '#4facfe', '#43e97b',
@@ -144,6 +152,15 @@ class Game {
     }
     
     setupTouchControls() {
+        // 只在移动设备上启用触摸控制
+        if (!this.isMobile) {
+            const touchControls = document.getElementById('touch-controls');
+            if (touchControls) {
+                touchControls.style.display = 'none';
+            }
+            return;
+        }
+        
         const joystick = document.getElementById('joystick');
         const joystickKnob = document.getElementById('joystick-knob');
         const touchShoot = document.getElementById('touch-shoot');
@@ -372,7 +389,8 @@ class Game {
     spawnEnemies() {
         setInterval(() => {
             if (!this.running) return;
-            if (this.enemies.length < 15) {
+            // 减少最大敌人数量以提升性能
+            if (this.enemies.length < 8) {
                 const side = Math.floor(Math.random() * 4);
                 let x, y;
                 
@@ -393,7 +411,7 @@ class Game {
                     angle: 0
                 });
             }
-        }, 2000);
+        }, 2500); // 增加生成间隔
     }
     
     gameLoop() {
@@ -434,7 +452,11 @@ class Game {
                 this.player.y += dy * this.player.speed;
             }
             
-            this.player.angle = Math.atan2(this.mouseY - this.player.y, this.mouseX - this.player.x);
+            // 计算鼠标在世界坐标中的位置
+            const worldMouseX = this.mouseX + this.cameraX;
+            const worldMouseY = this.mouseY + this.cameraY;
+            // 正确计算角度
+            this.player.angle = Math.atan2(worldMouseY - this.player.y, worldMouseX - this.player.x);
             
             if (this.mouseDown && Date.now() - this.player.lastShot > this.player.shootCooldown) {
                 if (this.player.ammo > 0) {
@@ -449,13 +471,17 @@ class Game {
         this.player.x = Math.max(this.player.radius, Math.min(this.mapWidth - this.player.radius, this.player.x));
         this.player.y = Math.max(this.player.radius, Math.min(this.mapHeight - this.player.radius, this.player.y));
         
-        // 相机跟随玩家
-        this.cameraX = this.player.x - this.width / 2;
-        this.cameraY = this.player.y - this.height / 2;
+        // 相机跟随玩家（平滑）
+        this.targetCameraX = this.player.x - this.width / 2;
+        this.targetCameraY = this.player.y - this.height / 2;
         
         // 相机边界限制
-        this.cameraX = Math.max(0, Math.min(this.mapWidth - this.width, this.cameraX));
-        this.cameraY = Math.max(0, Math.min(this.mapHeight - this.height, this.cameraY));
+        this.targetCameraX = Math.max(0, Math.min(this.mapWidth - this.width, this.targetCameraX));
+        this.targetCameraY = Math.max(0, Math.min(this.mapHeight - this.height, this.targetCameraY));
+        
+        // 平滑过渡
+        this.cameraX += (this.targetCameraX - this.cameraX) * this.cameraSpeed;
+        this.cameraY += (this.targetCameraY - this.cameraY) * this.cameraSpeed;
         
         if (this.player.ammo === 0 && this.player.reloadTime === 0) {
             const weapon = this.weapons[this.currentWeaponIndex];
@@ -508,17 +534,19 @@ class Game {
             this.bullets.push(bullet);
         }
         
-        // 射击粒子特效
-        for (let i = 0; i < 5; i++) {
-            this.particles.push({
-                x: this.player.x + Math.cos(this.player.angle) * this.player.radius,
-                y: this.player.y + Math.sin(this.player.angle) * this.player.radius,
-                vx: Math.cos(this.player.angle) * (3 + Math.random() * 3) + (Math.random() - 0.5) * 3,
-                vy: Math.sin(this.player.angle) * (3 + Math.random() * 3) + (Math.random() - 0.5) * 3,
-                radius: 2 + Math.random() * 2,
-                color: this.player.color,
-                life: 20
-            });
+        // 射击粒子特效（性能优化）
+        if (this.particles.length < this.maxParticles) {
+            for (let i = 0; i < 3; i++) { // 减少粒子数量
+                this.particles.push({
+                    x: this.player.x + Math.cos(this.player.angle) * this.player.radius,
+                    y: this.player.y + Math.sin(this.player.angle) * this.player.radius,
+                    vx: Math.cos(this.player.angle) * (3 + Math.random() * 3) + (Math.random() - 0.5) * 3,
+                    vy: Math.sin(this.player.angle) * (3 + Math.random() * 3) + (Math.random() - 0.5) * 3,
+                    radius: 2 + Math.random() * 2,
+                    color: this.player.color,
+                    life: 15 // 减少生命周期
+                });
+            }
         }
     }
     
@@ -528,8 +556,8 @@ class Game {
             bullet.x += bullet.vx;
             bullet.y += bullet.vy;
             
-            if (bullet.x < -50 || bullet.x > this.width + 50 || 
-                bullet.y < -50 || bullet.y > this.height + 50) {
+            if (bullet.x < -50 || bullet.x > this.mapWidth + 50 || 
+                bullet.y < -50 || bullet.y > this.mapHeight + 50) {
                 this.bullets.splice(i, 1);
                 continue;
             }

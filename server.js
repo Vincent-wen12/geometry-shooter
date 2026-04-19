@@ -262,7 +262,7 @@ process.on('unhandledRejection', (error) => {
     console.error('未处理的Promise拒绝:', error);
 });
 
-server.listen(PORT, () => {
+server.listen(PORT, '0.0.0.0', () => {
     console.log('\n🎮 几何枪战服务器已启动！');
     console.log(`📍 访问地址: http://localhost:${PORT}`);
     console.log('\n📋 游戏说明:');
