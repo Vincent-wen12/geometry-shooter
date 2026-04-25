@@ -10,6 +10,7 @@ class Game {
         this.bullets = [];
         this.enemies = [];
         this.particles = [];
+        this.loots = [];
         
         this.keys = {};
         this.mouseX = 0;
@@ -35,20 +36,34 @@ class Game {
         // 性能优化
         this.maxParticles = 300; // 最大粒子数
         
-        this.colors = [
-            '#667eea', '#f093fb', '#4facfe', '#43e97b',
-            '#fa709a', '#fee140', '#a8edea', '#ffecd2'
+        // RPG系统
+        this.loots = []; // 掉落物
+        this.lootTypes = [
+            { type: 'health', name: '生命药水', color: '#e74c3c', effect: 30, chance: 0.4 },
+            { type: 'ammo', name: '弹药箱', color: '#f39c12', effect: 15, chance: 0.5 },
+            { type: 'exp', name: '经验球', color: '#9b59b6', effect: 25, chance: 0.7 },
+            { type: 'speed', name: '速度药水', color: '#3498db', effect: 2, chance: 0.3 }
         ];
         
-        // 地形元素（只生成一次）
+        // 纯色RPG配色
+        this.colors = [
+            '#c0392b', '#2980b9', '#27ae60', '#d35400',
+            '#8e44ad', '#16a085', '#e67e22', '#2c3e50'
+        ];
+        
+        // 地形元素（树木、石头、障碍物）
         this.terrainElements = [];
         for (let i = 0; i < 50; i++) {
             this.terrainElements.push({
                 x: Math.random() * 3000,
                 y: Math.random() * 2000,
-                size: 20 + Math.random() * 50
+                size: 20 + Math.random() * 50,
+                type: Math.random() > 0.6 ? 'tree' : (Math.random() > 0.5 ? 'rock' : 'obstacle')
             });
         }
+        
+        // 区域地形生成
+        this.regions = this.generateRegions();
         
         // 武器库
         this.weapons = [
@@ -99,8 +114,29 @@ class Game {
             }
         ];
         
-        this.init();
-    }
+        // 多人互动
+         this.playerEffects = []; // 玩家特效
+         this.init();
+     }
+     
+     generateRegions() {
+         const regions = [];
+         const regionSize = 500;
+         
+         for (let x = 0; x < this.mapWidth; x += regionSize) {
+             for (let y = 0; y < this.mapHeight; y += regionSize) {
+                 const type = Math.random() > 0.7 ? 'forest' : (Math.random() > 0.5 ? 'rocks' : 'open');
+                 regions.push({
+                     x: x,
+                     y: y,
+                     width: regionSize,
+                     height: regionSize,
+                     type: type
+                 });
+             }
+         }
+         return regions;
+     }
     
     init() {
         this.resize();
@@ -262,14 +298,33 @@ class Game {
             });
         }
         
-        // 触屏瞄准
-        this.canvas.addEventListener('touchmove', (e) => {
-            e.preventDefault();
+        // 双击屏幕射击
+        let lastTap = 0;
+        this.canvas.addEventListener('touchstart', (e) => {
+            const now = Date.now();
+            if (now - lastTap < 300) {
+                this.mouseDown = true;
+            }
+            lastTap = now;
+            
+            // 触屏瞄准
             const touch = e.touches[0];
             const rect = this.canvas.getBoundingClientRect();
             this.mouseX = touch.clientX - rect.left;
             this.mouseY = touch.clientY - rect.top;
         });
+        
+        this.canvas.addEventListener('touchend', (e) => {
+            this.mouseDown = false;
+        });
+        
+        // 显示触屏控制
+        const touchControls = document.getElementById('touch-controls');
+        if (touchControls) {
+            touchControls.style.display = 'flex';
+            touchControls.style.justifyContent = 'space-between';
+            touchControls.style.padding = '0 20px';
+        }
     }
     
     setupChat() {
@@ -344,6 +399,7 @@ class Game {
         
         document.getElementById('start-screen').classList.add('hidden');
         document.getElementById('game-screen').classList.remove('hidden');
+        document.getElementById('gameover-screen').classList.add('hidden');
         
         this.currentWeaponIndex = 0; // 默认武器是手枪
         const weapon = this.weapons[this.currentWeaponIndex];
@@ -363,7 +419,11 @@ class Game {
             maxAmmo: weapon.maxAmmo,
             reloadTime: 0,
             lastShot: 0,
-            shootCooldown: weapon.shootCooldown
+            shootCooldown: weapon.shootCooldown,
+            level: 1,
+            exp: 0,
+            expToLevel: 100,
+            speedBoost: 0
         };
         
         // 初始化相机位置
@@ -374,6 +434,8 @@ class Game {
         this.bullets = [];
         this.enemies = [];
         this.particles = [];
+        this.loots = [];
+        this.players.clear();
         this.running = true;
         
         document.getElementById('room-display').textContent = roomId || '单人模式';
@@ -430,7 +492,49 @@ class Game {
         this.updateBullets();
         this.updateEnemies();
         this.updateParticles();
+        this.updateLoots();
+        this.updatePlayerEffects();
         this.updateUI();
+    }
+    
+    updatePlayerEffects() {
+        // 更新玩家特效
+        for (let i = this.playerEffects.length - 1; i >= 0; i--) {
+            const effect = this.playerEffects[i];
+            effect.life--;
+            effect.x += effect.vx;
+            effect.y += effect.vy;
+            
+            if (effect.life <= 0) {
+                this.playerEffects.splice(i, 1);
+            }
+        }
+        
+        // 其他玩家移动同步时添加特效
+        this.players.forEach((p) => {
+            if (Math.random() < 0.1) {
+                this.playerEffects.push({
+                    x: p.x + (Math.random() - 0.5) * 20,
+                    y: p.y + (Math.random() - 0.5) * 20,
+                    vx: (Math.random() - 0.5) * 2,
+                    vy: (Math.random() - 0.5) * 2,
+                    color: p.color,
+                    life: 15,
+                    radius: 3
+                });
+            }
+        });
+    }
+    
+    drawPlayerEffects() {
+        for (const effect of this.playerEffects) {
+            this.ctx.globalAlpha = effect.life / 15;
+            this.ctx.fillStyle = effect.color;
+            this.ctx.beginPath();
+            this.ctx.arc(effect.x, effect.y, effect.radius, 0, Math.PI * 2);
+            this.ctx.fill();
+        }
+        this.ctx.globalAlpha = 1;
     }
     
     updatePlayer() {
@@ -510,6 +614,117 @@ class Game {
         }
     }
     
+    spawnLoot(x, y, type, value) {
+        this.loots.push({
+            x: x,
+            y: y,
+            type: type,
+            value: value,
+            radius: 12,
+            bobOffset: Math.random() * Math.PI * 2
+        });
+    }
+    
+    updateLoots() {
+        for (let i = this.loots.length - 1; i >= 0; i--) {
+            const loot = this.loots[i];
+            loot.bobOffset += 0.1;
+            
+            // 检测玩家是否捡起
+            const dist = Math.hypot(this.player.x - loot.x, this.player.y - loot.y);
+            if (dist < this.player.radius + loot.radius + 20) {
+                this.collectLoot(loot);
+                this.loots.splice(i, 1);
+            }
+        }
+    }
+    
+    collectLoot(loot) {
+        switch(loot.type) {
+            case 'health':
+                this.player.health = Math.min(this.player.maxHealth, this.player.health + loot.value);
+                this.addKillFeed('系统', `拾取了 ${loot.value} 生命值`);
+                break;
+            case 'ammo':
+                this.player.ammo += loot.value;
+                this.addKillFeed('系统', `拾取了 ${loot.value} 发弹药`);
+                break;
+            case 'exp':
+                this.player.exp += loot.value;
+                this.addKillFeed('系统', `拾取了 ${loot.value} 经验`);
+                this.checkLevelUp();
+                break;
+            case 'speed':
+                this.player.speedBoost = loot.value;
+                this.player.speed = 5 + loot.value;
+                this.addKillFeed('系统', `拾取了速度药水`);
+                setTimeout(() => {
+                    this.player.speedBoost = 0;
+                    this.player.speed = 5;
+                }, 5000);
+                break;
+        }
+        
+        // 收集粒子效果
+        for (let i = 0; i < 5; i++) {
+            const angle = Math.random() * Math.PI * 2;
+            this.particles.push({
+                x: loot.x,
+                y: loot.y,
+                vx: Math.cos(angle) * 3,
+                vy: Math.sin(angle) * 3,
+                radius: 3,
+                color: loot.type === 'exp' ? '#9b59b6' : '#f39c12',
+                life: 15
+            });
+        }
+    }
+    
+    checkLevelUp() {
+        while (this.player.exp >= this.player.expToLevel) {
+            this.player.exp -= this.player.expToLevel;
+            this.player.level++;
+            this.player.expToLevel = Math.floor(this.player.expToLevel * 1.5);
+            this.player.maxHealth += 10;
+            this.player.health = this.player.maxHealth;
+            this.player.speed += 0.5;
+            this.addKillFeed('系统', `升级了！当前等级: ${this.player.level}`);
+        }
+    }
+    
+    drawLoots() {
+        for (const loot of this.loots) {
+            const bob = Math.sin(loot.bobOffset) * 3;
+            this.ctx.save();
+            this.ctx.translate(loot.x, loot.y + bob);
+            
+            // 发光效果
+            this.ctx.shadowColor = loot.color;
+            this.ctx.shadowBlur = 10;
+            
+            this.ctx.fillStyle = loot.color;
+            this.ctx.beginPath();
+            this.ctx.arc(0, 0, loot.radius, 0, Math.PI * 2);
+            this.ctx.fill();
+            
+            // 图标
+            this.ctx.fillStyle = 'white';
+            this.ctx.font = '12px Arial';
+            this.ctx.textAlign = 'center';
+            this.ctx.textBaseline = 'middle';
+            let icon = '';
+            switch(loot.type) {
+                case 'health': icon = '+'; break;
+                case 'ammo': icon = '•'; break;
+                case 'exp': icon = '★'; break;
+                case 'speed': icon = '»'; break;
+            }
+            this.ctx.fillText(icon, 0, 0);
+            
+            this.ctx.restore();
+        }
+    }
+    
     shoot() {
         const weapon = this.weapons[this.currentWeaponIndex];
         
@@ -562,48 +777,82 @@ class Game {
                 continue;
             }
             
+            // 检测是否击中敌人
             for (let j = this.enemies.length - 1; j >= 0; j--) {
                 const enemy = this.enemies[j];
                 const dist = Math.hypot(bullet.x - enemy.x, bullet.y - enemy.y);
-                
+
                 if (dist < bullet.radius + enemy.radius) {
                     enemy.health -= bullet.damage;
                     this.bullets.splice(i, 1);
-                    
-                    for (let k = 0; k < 8; k++) {
-                        const angle = (Math.PI * 2 / 8) * k;
+
+                    for (let k = 0; k < 5; k++) {
+                        const angle = Math.random() * Math.PI * 2;
+                        const speed = 2 + Math.random() * 3;
                         this.particles.push({
                             x: enemy.x,
                             y: enemy.y,
-                            vx: Math.cos(angle) * 4,
-                            vy: Math.sin(angle) * 4,
-                            radius: 3,
-                            color: '#ff4757',
-                            life: 30
+                            vx: Math.cos(angle) * speed,
+                            vy: Math.sin(angle) * speed,
+                            radius: 2 + Math.random() * 2,
+                            color: '#f39c12',
+                            life: 15
                         });
                     }
-                    
+
                     if (enemy.health <= 0) {
                         this.enemies.splice(j, 1);
                         this.kills++;
-                        
-                        for (let k = 0; k < 20; k++) {
-                            const angle = Math.random() * Math.PI * 2;
-                            const speed = 2 + Math.random() * 4;
+                        this.addKillFeed(this.player.name, `击杀了 怪物`);
+
+                        this.spawnLoot(enemy.x, enemy.y, 'exp', 25);
+
+                        if (Math.random() < 0.3) {
+                            const lootType = this.lootTypes[Math.floor(Math.random() * this.lootTypes.length)];
+                            this.spawnLoot(
+                                enemy.x + (Math.random() - 0.5) * 30,
+                                enemy.y + (Math.random() - 0.5) * 30,
+                                lootType.type,
+                                lootType.effect
+                            );
+                        }
+
+                        for (let k = 0; k < 8; k++) {
+                            const angle = (Math.PI * 2 / 8) * k;
                             this.particles.push({
                                 x: enemy.x,
                                 y: enemy.y,
-                                vx: Math.cos(angle) * speed,
-                                vy: Math.sin(angle) * speed,
-                                radius: 3 + Math.random() * 4,
-                                color: '#ff4757',
-                                life: 40
+                                vx: Math.cos(angle) * 4,
+                                vy: Math.sin(angle) * 4,
+                                radius: 4,
+                                color: '#f39c12',
+                                life: 25
                             });
                         }
-                        
-                        this.addKillFeed('你', '消灭了一个敌人');
                     }
                     break;
+                }
+            }
+
+            // 检测是否击中其他玩家（PVP）
+            if (bullet.owner === this.player.id) {
+                for (const [id, otherPlayer] of this.players) {
+                    const dist = Math.hypot(bullet.x - otherPlayer.x, bullet.y - otherPlayer.y);
+                    if (dist < bullet.radius + otherPlayer.radius) {
+                        otherPlayer.health -= bullet.damage;
+                        this.bullets.splice(i, 1);
+
+                        if (otherPlayer.health <= 0) {
+                            this.addKillFeed(this.player.name, `击杀了 ${otherPlayer.name}`);
+                            this.kills++;
+
+                            const expLost = Math.floor(otherPlayer.exp * 0.3);
+                            if (expLost > 0) {
+                                this.spawnLoot(otherPlayer.x, otherPlayer.y, 'exp', expLost);
+                            }
+                        }
+                        break;
+                    }
                 }
             }
         }
@@ -646,6 +895,8 @@ class Game {
         document.getElementById('health-fill').style.width = (this.player.health / this.player.maxHealth * 100) + '%';
         document.getElementById('ammo-count').textContent = this.player.ammo;
         document.getElementById('kill-count').textContent = this.kills;
+        document.getElementById('level-count').textContent = this.player.level;
+        document.getElementById('exp-fill').style.width = (this.player.exp / this.player.expToLevel * 100) + '%';
         
         // 更新挂机状态显示
         const autoDisplay = document.getElementById('auto-display');
@@ -745,7 +996,9 @@ class Game {
         
         this.drawMap();
         this.drawGrid();
+        this.drawLoots();
         this.drawParticles();
+        this.drawPlayerEffects();
         this.drawBullets();
         this.drawEnemies();
         this.players.forEach(p => this.drawPlayer(p));
@@ -757,25 +1010,54 @@ class Game {
     }
     
     drawMap() {
-        // 绘制地图背景
-        const gradient = this.ctx.createLinearGradient(0, 0, this.mapWidth, this.mapHeight);
-        gradient.addColorStop(0, '#0f0c29');
-        gradient.addColorStop(0.5, '#302b63');
-        gradient.addColorStop(1, '#24243e');
-        this.ctx.fillStyle = gradient;
+        // 纯色RPG风格草地
+        this.ctx.fillStyle = '#1a3d1a';
         this.ctx.fillRect(0, 0, this.mapWidth, this.mapHeight);
         
-        // 绘制地图边界
-        this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
-        this.ctx.lineWidth = 5;
+        // 绘制草地纹理
+        this.ctx.fillStyle = '#1e4d1e';
+        for (let i = 0; i < 100; i++) {
+            const x = Math.random() * this.mapWidth;
+            const y = Math.random() * this.mapHeight;
+            this.ctx.fillRect(x, y, 3, 3);
+        }
+        
+        // 绘制地图边界 - 石墙风格
+        this.ctx.strokeStyle = '#4a4a4a';
+        this.ctx.lineWidth = 12;
         this.ctx.strokeRect(0, 0, this.mapWidth, this.mapHeight);
         
-        // 绘制地形元素
+        // 绘制地形元素 - 树木和石头
         for (const element of this.terrainElements) {
-            this.ctx.fillStyle = 'rgba(102, 126, 234, 0.1)';
-            this.ctx.beginPath();
-            this.ctx.arc(element.x, element.y, element.size, 0, Math.PI * 2);
-            this.ctx.fill();
+            if (element.type === 'tree') {
+                // 树干
+                this.ctx.fillStyle = '#5d4037';
+                this.ctx.fillRect(element.x - 4, element.y - element.size * 0.3, 8, element.size * 0.8);
+                // 树冠发光效果
+                this.ctx.shadowColor = '#2e7d32';
+                this.ctx.shadowBlur = 15;
+                this.ctx.fillStyle = '#2e7d32';
+                this.ctx.beginPath();
+                this.ctx.arc(element.x, element.y - element.size * 0.4, element.size * 0.8, 0, Math.PI * 2);
+                this.ctx.fill();
+                this.ctx.shadowBlur = 0;
+            } else if (element.type === 'rock') {
+                // 石头发光效果
+                this.ctx.shadowColor = '#9e9e9e';
+                this.ctx.shadowBlur = 10;
+                this.ctx.fillStyle = '#757575';
+                this.ctx.beginPath();
+                this.ctx.arc(element.x, element.y, element.size * 0.6, 0, Math.PI * 2);
+                this.ctx.fill();
+                this.ctx.shadowBlur = 0;
+            } else if (element.type === 'obstacle') {
+                // 障碍物发光效果
+                this.ctx.shadowColor = '#c0392b';
+                this.ctx.shadowBlur = 20;
+                this.ctx.fillStyle = '#c0392b';
+                this.ctx.fillRect(element.x - element.size/2, element.y - element.size/2, element.size, element.size);
+                this.ctx.shadowBlur = 0;
+            }
         }
     }
     
@@ -803,8 +1085,9 @@ class Game {
         this.ctx.translate(player.x, player.y);
         this.ctx.rotate(player.angle);
         
+        // 玩家发光效果
         this.ctx.shadowColor = player.color;
-        this.ctx.shadowBlur = 20;
+        this.ctx.shadowBlur = isSelf ? 25 : 20;
         
         this.ctx.fillStyle = player.color;
         this.ctx.beginPath();
@@ -836,10 +1119,19 @@ class Game {
         
         this.ctx.restore();
         
+        // 玩家名称
+        this.ctx.rotate(-player.angle);
         this.ctx.fillStyle = '#fff';
-        this.ctx.font = '12px Arial';
+        this.ctx.font = 'bold 12px Arial';
         this.ctx.textAlign = 'center';
-        this.ctx.fillText(player.name, player.x, player.y - player.radius - 10);
+        this.ctx.fillText(player.name, 0, -player.radius - 10);
+        
+        // 玩家等级
+        if (player.level) {
+            this.ctx.fillStyle = '#f39c12';
+            this.ctx.font = 'bold 10px Arial';
+            this.ctx.fillText('Lv.' + player.level, 0, -player.radius - 25);
+        }
         
         if (isSelf && player.health < player.maxHealth) {
             this.ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';

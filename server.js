@@ -103,7 +103,14 @@ function handleMessage(ws, message) {
             break;
             
         case 'ping':
-            // 忽略心跳消息
+            break;
+            
+        case 'pvpHit':
+            handlePvpHit(ws, message);
+            break;
+            
+        case 'playerKilled':
+            handlePlayerKilled(ws, message);
             break;
     }
 }
@@ -186,6 +193,47 @@ function handleChat(ws, message) {
             userId: ws.userId,
             name: player.name,
             message: message.message
+        });
+    }
+}
+
+function handlePvpHit(ws, message) {
+    if (!ws.roomId || !rooms.has(ws.roomId)) return;
+    
+    const room = rooms.get(ws.roomId);
+    const targetPlayer = room.get(message.targetId);
+    
+    if (targetPlayer) {
+        targetPlayer.health -= message.damage;
+        
+        broadcastToRoom(ws.roomId, {
+            type: 'pvpHit',
+            targetId: message.targetId,
+            damage: message.damage
+        }, ws);
+    }
+}
+
+function handlePlayerKilled(ws, message) {
+    if (!ws.roomId || !rooms.has(ws.roomId)) return;
+    
+    const room = rooms.get(ws.roomId);
+    const victim = room.get(message.victimId);
+    
+    if (victim) {
+        const expLost = Math.floor(victim.exp * 0.3);
+        victim.exp = Math.floor(victim.exp * 0.7);
+        victim.x = Math.random() * 800 + 100;
+        victim.y = Math.random() * 600 + 100;
+        victim.health = 100;
+        
+        broadcastToRoom(ws.roomId, {
+            type: 'playerRespawn',
+            userId: message.victimId,
+            x: victim.x,
+            y: victim.y,
+            exp: victim.exp,
+            health: victim.health
         });
     }
 }

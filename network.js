@@ -98,6 +98,34 @@ class Network {
                     window.game.addChatMessage(data.name, data.message, false);
                 }
                 break;
+                
+            case 'pvpHit':
+                if (data.targetId === this.userId) {
+                    window.game.player.health -= data.damage;
+                    if (window.game.player.health <= 0) {
+                        window.game.player.health = window.game.player.maxHealth;
+                        window.game.player.x = Math.random() * window.game.mapWidth;
+                        window.game.player.y = Math.random() * window.game.mapHeight;
+                    }
+                }
+                break;
+                
+            case 'playerRespawn':
+                if (data.userId === this.userId) {
+                    window.game.player.x = data.x;
+                    window.game.player.y = data.y;
+                    window.game.player.exp = data.exp;
+                    window.game.player.health = data.health;
+                } else {
+                    const player = window.game.players.get(data.userId);
+                    if (player) {
+                        player.x = data.x;
+                        player.y = data.y;
+                        player.exp = data.exp;
+                        player.health = data.health;
+                    }
+                }
+                break;
         }
     }
     
