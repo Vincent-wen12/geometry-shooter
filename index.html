@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>几何枪战 - 2D 多人联机</title>
     <link rel="stylesheet" href="style.css">
+    <script src="public/sprites/sprite_generator.js"></script>
 </head>
 <body>
     <div id="start-screen" class="screen">
@@ -42,7 +43,7 @@
                 </div>
                 
                 <div class="info-section">
-                    <h3>⌨️ 操作说明</h3>
+                    <h3>操作说明</h3>
                     <ul>
                         <li>• WASD / 方向键 - 移动</li>
                         <li>• 鼠标 - 瞄准</li>
@@ -64,27 +65,28 @@
         <div class="hud">
             <div class="hud-left">
                 <div class="health-bar">
-                    <span class="label">❤️ 生命值</span>
+                    <span class="label">生命值</span>
                     <div class="bar">
                         <div id="health-fill" class="fill"></div>
                     </div>
                 </div>
                 <div class="level-bar">
-                    <span class="label">⭐ 等级 <span id="level-count">1</span></span>
+                    <span class="label">等级 <span id="level-count">1</span></span>
                     <div class="bar">
                         <div id="exp-fill" class="fill exp-fill"></div>
                     </div>
                 </div>
                 <div class="ammo">
-                    <span class="label">🔫 弹药</span>
+                    <span class="label">弹药</span>
                     <span id="ammo-count">30</span>/30
                 </div>
             </div>
             <div class="hud-center">
                 <div class="score">
-                    <span class="label">💀 击杀</span>
+                    <span class="label">击杀</span>
                     <span id="kill-count">0</span>
                 </div>
+                <div id="day-night-display" class="day-night">白天</div>
             </div>
             <div class="hud-right">
                 <div id="auto-display" class="auto-display">✋ 手动</div>
@@ -99,27 +101,16 @@
             <div id="chat-messages" class="chat-messages"></div>
             <div class="chat-input-area">
                 <input type="text" id="chat-input" placeholder="按Enter发送消息...">
-                <button id="chat-emoji-btn">😊</button>
-                <div id="emoji-panel" class="emoji-panel hidden">
-                    <div class="emoji-grid">
-                        🎮 🎯 💀 👻 🎃 🤖 👽 💩
-                        😎 🥳 😈 👿 😇 🤡 😂 🤣
-                        😭 😤 😡 🤯 😱 😨 🥵 🥶
-                        ❤️ 💔 💕 💖 💗 💘 💝 💞
-                        👍 👎 ✌️ 👌 🤘 🤙 👋 🤝
-                        🎵 🎶 🎧 🎤 🎸 🎺 🥁 🔔
-                        ⭐ 🌟 💫 ✨ 🔥 💥 💢 💦
-                        🍎 🍕 🍔 🍟 🌮 🍜 🍣 🍦
-                        🚀 ✈️ 🚗 🏎️ 🏍️ 🚢 ⛵ 🚁
-                    </div>
-                </div>
             </div>
         </div>
         <div id="weapon-bar" class="weapon-bar">
-            <div id="weapon-0" class="weapon-slot active">1 🔫</div>
-            <div id="weapon-1" class="weapon-slot">2 🔥</div>
-            <div id="weapon-2" class="weapon-slot">3 💥</div>
-            <div id="weapon-3" class="weapon-slot">4 🎯</div>
+            <div id="weapon-0" class="weapon-slot active" data-weapon="pistol">1</div>
+            <div id="weapon-1" class="weapon-slot" data-weapon="smg">2</div>
+            <div id="weapon-2" class="weapon-slot" data-weapon="shotgun">3</div>
+            <div id="weapon-3" class="weapon-slot" data-weapon="sniper">4</div>
+            <div id="weapon-4" class="weapon-slot" data-weapon="rifle">5</div>
+            <div id="weapon-5" class="weapon-slot" data-weapon="machinegun">6</div>
+            <div id="weapon-6" class="weapon-slot" data-weapon="rocket">7</div>
         </div>
         
         <!-- 触屏控制 -->
@@ -127,7 +118,7 @@
             <div id="joystick" class="joystick">
                 <div id="joystick-knob" class="joystick-knob"></div>
             </div>
-            <button id="touch-shoot" class="touch-button shoot-button">🔫</button>
+            <button id="touch-shoot" class="touch-button shoot-button"></button>
             <button id="touch-f" class="touch-button f-button">F</button>
         </div>
     </div>
