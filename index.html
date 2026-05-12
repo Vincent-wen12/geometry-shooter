@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>几何枪战 - 2D 多人联机</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="public/sprites/sprite_generator.js"></script>
+</head>
+<body>
+    <div id="start-screen" class="screen">
+        <div class="start-content">
+            <div class="game-title">
+                <h1 data-i18n="title">几何枪战</h1>
+                <p class="subtitle" data-i18n="subtitle">GEOMETRIC GUNFIGHT</p>
+            </div>
+            
+            <div class="lang-bar">
+                <button id="btn-lang-zh" class="lang-btn active" data-lang="zh">中文</button>
+                <button id="btn-lang-en" class="lang-btn" data-lang="en">EN</button>
+            </div>
+            
+            <div class="start-options">
+                <div class="input-group">
+                    <label data-i18n="nickname">昵称</label>
+                    <input type="text" id="player-name" data-i18n-placeholder="nicknamePlaceholder" placeholder="输入你的游戏昵称" maxlength="12">
+                </div>
+                
+                <div class="input-group">
+                    <label data-i18n="roomId">房间ID</label>
+                    <input type="text" id="room-id" data-i18n-placeholder="roomIdPlaceholder" placeholder="输入房间ID (留空单人模式)">
+                </div>
+                
+                <button id="btn-start" class="start-button" data-i18n="startGame">开始游戏</button>
+            </div>
+            
+            <div class="official-section">
+                <div class="divider"><span data-i18n="officialServer">官方服务器</span></div>
+                <button id="btn-official" class="official-button" data-i18n="quickMatch">快速匹配</button>
+                <div id="official-rooms" class="official-rooms">
+                    <div class="official-room-item">
+                        <span class="room-name" data-i18n-prefix="roomName">官方-1</span>
+                        <span class="room-dots"></span>
+                        <span class="room-count">0/8</span>
+                    </div>
+                    <div class="official-room-item">
+                        <span class="room-name" data-i18n-prefix="roomName">官方-2</span>
+                        <span class="room-dots"></span>
+                        <span class="room-count">0/8</span>
+                    </div>
+                    <div class="official-room-item">
+                        <span class="room-name" data-i18n-prefix="roomName">官方-3</span>
+                        <span class="room-dots"></span>
+                        <span class="room-count">0/8</span>
+                    </div>
+                    <div class="official-room-item">
+                        <span class="room-name" data-i18n-prefix="roomName">官方-4</span>
+                        <span class="room-dots"></span>
+                        <span class="room-count">0/8</span>
+                    </div>
+                    <div class="official-room-item">
+                        <span class="room-name" data-i18n-prefix="roomName">官方-5</span>
+                        <span class="room-dots"></span>
+                        <span class="room-count">0/8</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="game-info">
+                <div class="info-section">
+                    <h3 data-i18n="features">游戏特色</h3>
+                    <ul id="features-list">
+                    </ul>
+                </div>
+                
+                <div class="info-section">
+                    <h3 data-i18n="controls">操作说明</h3>
+                    <ul id="controls-list">
+                    </ul>
+                </div>
+            </div>
+            
+            <div class="footer">
+                <p data-i18n="footer">自由创作游戏</p>
+            </div>
+        </div>
+    </div>
+    
+    <div id="game-screen" class="screen hidden">
+        <div class="hud">
+            <div class="hud-left">
+                <div class="health-bar">
+                    <span class="label" data-i18n="health">生命值</span>
+                    <div class="bar">
+                        <div id="health-fill" class="fill"></div>
+                    </div>
+                </div>
+                <div class="level-bar">
+                    <span class="label"><span data-i18n="level">等级</span> <span id="level-count">1</span></span>
+                    <div class="bar">
+                        <div id="exp-fill" class="fill exp-fill"></div>
+                    </div>
+                </div>
+                <div class="ammo">
+                    <span class="label" data-i18n="ammo">弹药</span>
+                    <span id="ammo-count">30</span>/30
+                </div>
+            </div>
+            <div class="hud-center">
+                <div class="score">
+                    <span class="label" data-i18n="kills">击杀</span>
+                    <span id="kill-count">0</span>
+                </div>
+                <div id="day-night-display" class="day-night"></div>
+            </div>
+            <div class="hud-right">
+                <div id="auto-display" class="auto-display"></div>
+                <button id="btn-music" class="music-button" title="背景音乐">♪</button>
+                <div id="room-display" class="room-display"></div>
+                <button id="btn-quit" data-i18n="quit">退出</button>
+            </div>
+        </div>
+        <canvas id="gameCanvas"></canvas>
+        <div id="players-list" class="players-list"></div>
+        <div id="kill-feed" class="kill-feed"></div>
+        <div id="chat-container" class="chat-container">
+            <div id="chat-messages" class="chat-messages"></div>
+            <div class="chat-input-wrapper">
+                <input type="text" id="chat-input" data-i18n-placeholder="chatPlaceholder" placeholder="按 Enter 发送消息...">
+            </div>
+        </div>
+        <div id="weapon-bar" class="weapon-bar">
+            <div id="weapon-0" class="weapon-slot active" data-weapon="pistol" title="手枪">1</div>
+            <div id="weapon-1" class="weapon-slot" data-weapon="smg" title="冲锋枪">2</div>
+            <div id="weapon-2" class="weapon-slot" data-weapon="shotgun" title="霰弹枪">3</div>
+            <div id="weapon-3" class="weapon-slot" data-weapon="sniper" title="狙击枪">4</div>
+            <div id="weapon-4" class="weapon-slot" data-weapon="rifle" title="步枪">5</div>
+            <div id="weapon-5" class="weapon-slot" data-weapon="machinegun" title="机枪">6</div>
+            <div id="weapon-6" class="weapon-slot" data-weapon="rocket" title="火箭筒">7</div>
+        </div>
+        
+        <!-- 触屏控制 -->
+        <div id="touch-controls" class="touch-controls">
+            <div id="joystick" class="joystick">
+                <div id="joystick-knob" class="joystick-knob"></div>
+            </div>
+            <button id="touch-shoot" class="touch-button shoot-button"></button>
+            <button id="touch-f" class="touch-button f-button">F</button>
+        </div>
+    </div>
+    
+    <div id="gameover-screen" class="screen hidden">
+        <div class="gameover-content">
+            <h1 data-i18n="gameOver">游戏结束</h1>
+            <div id="final-stats"></div>
+            <button id="btn-restart" data-i18n="restart">再来一局</button>
+        </div>
+    </div>
+    
+    <script src="network.js"></script>
+    <script src="game.js"></script>
+</body>
+</html>
