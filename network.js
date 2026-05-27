@@ -151,6 +151,22 @@ class Network {
             case 'officialRoomJoined':
                 this.handleOfficialRoomJoined(data);
                 break;
+                
+            case 'friendList':
+                this.handleFriendList(data);
+                break;
+            case 'friendOnline':
+                this.handleFriendOnline(data);
+                break;
+            case 'friendOffline':
+                this.handleFriendOffline(data);
+                break;
+            case 'addFriendError':
+                this.handleAddFriendError(data);
+                break;
+            case 'nameTaken':
+                this.handleNameTaken(data);
+                break;
         }
     }
     
@@ -218,7 +234,21 @@ class Network {
                 color: e.color,
                 angle: e.angle,
                 hitFlash: e.hitFlash || 0,
-                speed: 2
+                speed: e.speed || 2
+            }));
+        }
+        
+        if (data.obstacles) {
+            game.obstacles = data.obstacles.map(o => ({
+                id: o.id,
+                x: o.x,
+                y: o.y,
+                radius: o.radius,
+                health: o.health,
+                maxHealth: o.maxHealth,
+                color: o.color,
+                angle: o.angle,
+                shape: o.shape || 'circle'
             }));
         }
         
@@ -267,6 +297,22 @@ class Network {
                 fireRate: v.type === 'tank' ? 800 : v.type === 'armored' ? 600 : 400,
                 damage: v.type === 'tank' ? 25 : v.type === 'armored' ? 20 : 15
             }));
+        }
+        
+        if (data.enemyBullets) {
+            game.enemyBullets = data.enemyBullets.map(b => ({
+                x: b.x,
+                y: b.y,
+                vx: b.vx,
+                vy: b.vy,
+                radius: b.radius || 4,
+                angle: b.angle || 0,
+                life: 10
+            }));
+        }
+        
+        if (data.terrainType && data.terrainType !== game.terrainType) {
+            game.generateTerrain(data.terrainType);
         }
     }
     
@@ -547,6 +593,62 @@ class Network {
             this.socket.close();
             this.socket = null;
             this.connected = false;
+        }
+    }
+    
+    addFriend(targetName) {
+        console.log(`[Network] addFriend() called with targetName=${targetName}`);
+        this.send({ type: 'addFriend', targetName: targetName });
+    }
+    
+    removeFriend(targetUserId) {
+        console.log(`[Network] removeFriend() called targetUserId=${targetUserId}`);
+        this.send({ type: 'removeFriend', targetUserId: targetUserId });
+    }
+    
+    handleFriendList(data) {
+        console.log(`[Network] handleFriendList received:`, JSON.stringify(data.friends));
+        window.game.friends = data.friends || [];
+        window.game.updateFriendList();
+    }
+    
+    handleFriendOnline(data) {
+        console.log(`[Network] handleFriendOnline userId=${data.userId} name=${data.name}`);
+        if (window.game.friends) {
+            const friend = window.game.friends.find(f => f.userId === data.userId);
+            if (friend) {
+                friend.online = true;
+                console.log(`[Network] Updated existing friend ${data.name} to online`);
+            } else {
+                window.game.friends.push({ userId: data.userId, name: data.name, online: true });
+                console.log(`[Network] Added new online friend ${data.name}`);
+            }
+            window.game.updateFriendList();
+        }
+    }
+    
+    handleFriendOffline(data) {
+        console.log(`[Network] handleFriendOffline userId=${data.userId}`);
+        if (window.game.friends) {
+            const friend = window.game.friends.find(f => f.userId === data.userId);
+            if (friend) {
+                friend.online = false;
+                console.log(`[Network] Updated friend ${friend.name} to offline`);
+            }
+            window.game.updateFriendList();
+        }
+    }
+    
+    handleAddFriendError(data) {
+        console.log(`[Network] handleAddFriendError: ${data.message}`);
+        window.game.addChatMessage('系统', data.message, false);
+    }
+    
+    handleNameTaken(data) {
+        console.log(`[Network] handleNameTaken: original=${data.originalName} assigned=${data.assignedName}`);
+        if (window.game && window.game.player) {
+            window.game.player.name = data.assignedName;
+            window.game.addChatMessage('系统', `名称已存在，已自动更名为: ${data.assignedName}`, false);
         }
     }
 }

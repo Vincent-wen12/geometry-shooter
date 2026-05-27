@@ -5,8 +5,8 @@ const path = require('path');
 
 const PORT = process.env.PORT || 3000;
 
-const MAP_WIDTH = 3000;
-const MAP_HEIGHT = 2000;
+const MAP_WIDTH = 5000;
+const MAP_HEIGHT = 4000;
 
 const OFFICIAL_ROOM_COUNT = 5;
 const MAX_PLAYERS_PER_ROOM = 8;
@@ -71,6 +71,9 @@ const wss = new WebSocket.Server({ server });
 
 const rooms = new Map();
 const gameStates = new Map();
+const registeredNames = new Set();
+const friendMap = new Map();
+const playerOnlineMap = new Map();
 
 const VEHICLE_TYPES = [
     { type: 'tank', name: '坦克', color: '#e74c3c', radius: 30, speed: 3, health: 200, fireRate: 800, damage: 25 },
@@ -95,10 +98,13 @@ function ensureGameState(roomId) {
     if (!gameStates.has(roomId)) {
         const gs = {
             enemies: [],
+            enemyBullets: [],
+            obstacles: [],
             loots: [],
             powerups: [],
             vehicles: [],
             bullets: [],
+            terrainType: ['grassland', 'desert', 'mountains', 'rivers'][Math.floor(Math.random() * 4)],
             tickCount: 0,
             enemySpawnCounter: 0,
             enemyIdCounter: 0,
@@ -106,9 +112,11 @@ function ensureGameState(roomId) {
             powerupIdCounter: 0,
             vehicleIdCounter: 0,
             bulletIdCounter: 0,
+            obsIdCounter: 0,
             tickInterval: null
         };
         gameStates.set(roomId, gs);
+        spawnObstacles(gs);
         return gs;
     }
     return gameStates.get(roomId);
@@ -175,7 +183,10 @@ function gameTick(roomId) {
     // 6. Update server-tracked bullets
     updateBullets(roomId);
     
-    // 7. Broadcast game state
+    // 7. Update enemy bullets
+    updateEnemyBullets(roomId);
+    
+    // 8. Broadcast game state
     broadcastGameState(roomId);
 }
 
@@ -240,6 +251,22 @@ function updateBullets(roomId) {
             }
             if (hit) break;
             
+            if (!hit && gs.obstacles.length > 0) {
+                for (const obs of gs.obstacles) {
+                    const dist = Math.hypot(cx - obs.x, cy - obs.y);
+                    if (dist < bullet.radius + obs.radius) {
+                        obs.health -= bullet.damage;
+                        if (obs.health <= 0) {
+                            const oidx = gs.obstacles.indexOf(obs);
+                            if (oidx !== -1) gs.obstacles.splice(oidx, 1);
+                        }
+                        hit = true;
+                        break;
+                    }
+                }
+            }
+            if (hit) break;
+            
             if (bullet.ownerId) {
                 for (const [playerId, player] of room) {
                     if (playerId === bullet.ownerId) continue;
@@ -282,6 +309,64 @@ function updateBullets(roomId) {
     }
 }
 
+function updateEnemyBullets(roomId) {
+    const gs = gameStates.get(roomId);
+    const room = rooms.get(roomId);
+    if (!gs || !room) return;
+    
+    for (let i = gs.enemyBullets.length - 1; i >= 0; i--) {
+        const b = gs.enemyBullets[i];
+        b.x += b.vx;
+        b.y += b.vy;
+        b.life--;
+        
+        if (b.x < -50 || b.x > MAP_WIDTH + 50 ||
+            b.y < -50 || b.y > MAP_HEIGHT + 50 ||
+            b.life <= 0) {
+            gs.enemyBullets.splice(i, 1);
+            continue;
+        }
+        
+        let hit = false;
+        for (const obs of gs.obstacles) {
+            if (Math.hypot(b.x - obs.x, b.y - obs.y) < b.radius + obs.radius) {
+                obs.health -= b.damage;
+                hit = true;
+                break;
+            }
+        }
+        if (hit) { gs.enemyBullets.splice(i, 1); continue; }
+        
+        room.forEach((player, id) => {
+            if (hit) return;
+            const dist = Math.hypot(player.x - b.x, player.y - b.y);
+            if (dist < 20 + b.radius) {
+                player.health -= b.damage;
+                if (player.health < 0) player.health = 0;
+                hit = true;
+                broadcastToRoom(roomId, {
+                    type: 'hit',
+                    targetId: id,
+                    damage: b.damage
+                });
+                if (player.health <= 0) {
+                    broadcastToRoom(roomId, {
+                        type: 'pvpDeath',
+                        victimId: id,
+                        victimName: player.name
+                    });
+                    player.health = 100;
+                    player.x = Math.random() * (MAP_WIDTH - 400) + 200;
+                    player.y = Math.random() * (MAP_HEIGHT - 400) + 200;
+                    player.deaths = (player.deaths || 0) + 1;
+                    sendPlayersList(roomId);
+                }
+            }
+        });
+        if (hit) { gs.enemyBullets.splice(i, 1); continue; }
+    }
+}
+
 function spawnEnemy(roomId) {
     const gs = gameStates.get(roomId);
     if (!gs) return;
@@ -301,7 +386,7 @@ function spawnEnemy(roomId) {
         x: x,
         y: y,
         radius: 15 + Math.random() * 15,
-        speed: 1.5 + Math.random() * 2,
+        speed: 2.5 + Math.random() * 3,
         health: 30 + Math.random() * 30,
         maxHealth: 0,
         color: '#ff4757',
@@ -310,6 +395,41 @@ function spawnEnemy(roomId) {
     });
     const enemy = gs.enemies[gs.enemies.length - 1];
     enemy.maxHealth = enemy.health;
+}
+
+function spawnObstacles(gs) {
+    if (!gs) return;
+    const terrain = gs.terrainType || 'grassland';
+    let obsColors, count;
+    
+    if (terrain === 'desert') {
+        obsColors = ['#8B7355', '#A0522D', '#CD853F', '#D2B48C', '#B8860B'];
+        count = 15 + Math.floor(Math.random() * 8);
+    } else if (terrain === 'mountains') {
+        obsColors = ['#555', '#666', '#777', '#5a5a5a', '#4a4a4a'];
+        count = 22 + Math.floor(Math.random() * 10);
+    } else if (terrain === 'rivers') {
+        obsColors = ['#5F9EA0', '#6B8E23', '#556B2F', '#8FBC8F', '#7B8D6B'];
+        count = 18 + Math.floor(Math.random() * 8);
+    } else {
+        obsColors = ['#8B7355', '#A0522D', '#6B4226', '#556B2F', '#5F9EA0', '#B8860B'];
+        count = 20 + Math.floor(Math.random() * 10);
+    }
+    
+    for (let i = 0; i < count; i++) {
+        gs.obstacles.push({
+            id: 'obs_' + (gs.obsIdCounter++),
+            x: 100 + Math.random() * (MAP_WIDTH - 200),
+            y: 100 + Math.random() * (MAP_HEIGHT - 200),
+            radius: 20 + Math.random() * 35,
+            health: 100 + Math.random() * 150,
+            maxHealth: 0,
+            color: obsColors[Math.floor(Math.random() * obsColors.length)],
+            angle: Math.random() * Math.PI * 2,
+            shape: Math.random() > 0.5 ? 'circle' : 'rect'
+        });
+        gs.obstacles[i].maxHealth = gs.obstacles[i].health;
+    }
 }
 
 function spawnPowerup(roomId) {
@@ -397,8 +517,11 @@ function updateEnemiesAI(roomId) {
         if (nearestPlayer) {
             const angle = Math.atan2(nearestPlayer.y - enemy.y, nearestPlayer.x - enemy.x);
             enemy.angle = angle;
-            enemy.x += Math.cos(angle) * enemy.speed;
-            enemy.y += Math.sin(angle) * enemy.speed;
+            
+            if (nearestDist > 150) {
+                enemy.x += Math.cos(angle) * enemy.speed;
+                enemy.y += Math.sin(angle) * enemy.speed;
+            }
             
             enemy.x = Math.max(-50, Math.min(MAP_WIDTH + 50, enemy.x));
             enemy.y = Math.max(-50, Math.min(MAP_HEIGHT + 50, enemy.y));
@@ -407,6 +530,26 @@ function updateEnemiesAI(roomId) {
             if (dist < enemy.radius + 20) {
                 nearestPlayer.health -= 0.5;
                 if (nearestPlayer.health < 0) nearestPlayer.health = 0;
+            }
+            
+            if (dist < 800) {
+                if (enemy.shootTimer === undefined) enemy.shootTimer = 40 + Math.random() * 60;
+                enemy.shootTimer--;
+                if (enemy.shootTimer <= 0) {
+                    enemy.shootTimer = 40 + Math.random() * 60;
+                    const bulletSpeed = 7 + Math.random() * 4;
+                    gs.enemyBullets.push({
+                        x: enemy.x,
+                        y: enemy.y,
+                        vx: (nearestPlayer.x - enemy.x) / dist * bulletSpeed,
+                        vy: (nearestPlayer.y - enemy.y) / dist * bulletSpeed,
+                        radius: 4,
+                        damage: 5 + Math.floor(Math.random() * 6),
+                        angle: enemy.angle,
+                        life: 200,
+                        owner: 'enemy'
+                    });
+                }
             }
         }
         
@@ -635,7 +778,19 @@ function broadcastGameState(roomId) {
             maxHealth: e.maxHealth,
             color: e.color,
             angle: e.angle,
-            hitFlash: e.hitFlash
+            hitFlash: e.hitFlash,
+            speed: e.speed
+        })),
+        obstacles: gs.obstacles.map(o => ({
+            id: o.id,
+            x: Math.round(o.x),
+            y: Math.round(o.y),
+            radius: o.radius,
+            health: Math.round(o.health),
+            maxHealth: o.maxHealth,
+            color: o.color,
+            angle: o.angle,
+            shape: o.shape
         })),
         loots: gs.loots.map(l => ({
             id: l.id,
@@ -668,7 +823,16 @@ function broadcastGameState(roomId) {
             occupied: v.occupied,
             occupantId: v.occupantId,
             speed: v.speed
-        }))
+        })),
+        enemyBullets: gs.enemyBullets.map(b => ({
+            x: Math.round(b.x),
+            y: Math.round(b.y),
+            vx: b.vx,
+            vy: b.vy,
+            radius: b.radius,
+            angle: b.angle || 0
+        })),
+        terrainType: gs.terrainType || 'grassland'
     };
     
     broadcastToRoom(roomId, state);
@@ -778,12 +942,36 @@ function handleMessage(ws, message) {
         case 'joinOfficialRoom':
             handleJoinOfficialRoom(ws, message);
             break;
+        case 'addFriend':
+            handleAddFriend(ws, message);
+            break;
+        case 'removeFriend':
+            handleRemoveFriend(ws, message);
+            break;
+        case 'joinFriendRoom':
+            handleJoinFriendRoom(ws, message);
+            break;
     }
 }
 
 function handleJoin(ws, message) {
     const roomId = message.roomId || 'default';
     const userId = message.userId;
+    let playerName = message.name;
+    
+    console.log(`[handleJoin] Attempting join: userId=${userId} name=${playerName} roomId=${roomId}`);
+    
+    if (registeredNames.has(playerName)) {
+        const originalName = playerName;
+        playerName = playerName + '_' + Math.floor(Math.random() * 1000);
+        while (registeredNames.has(playerName)) {
+            playerName = message.name + '_' + Math.floor(Math.random() * 1000);
+        }
+        console.log(`[handleJoin] Name taken! ${originalName} -> ${playerName}`);
+        ws.send(JSON.stringify({ type: 'nameTaken', originalName: message.name, assignedName: playerName }));
+    }
+    registeredNames.add(playerName);
+    console.log(`[handleJoin] Registered name: ${playerName}, total registered: ${registeredNames.size}`);
     
     if (!rooms.has(roomId)) {
         rooms.set(roomId, new Map());
@@ -792,7 +980,7 @@ function handleJoin(ws, message) {
     const room = rooms.get(roomId);
     room.set(userId, {
         id: userId,
-        name: message.name,
+        name: playerName,
         color: message.color,
         ws: ws,
         x: Math.random() * 400 + 200,
@@ -807,18 +995,32 @@ function handleJoin(ws, message) {
     
     ws.roomId = roomId;
     ws.userId = userId;
+    ws.playerName = playerName;
+    playerOnlineMap.set(userId, { name: playerName, roomId: roomId, ws: ws });
     
     startGameLoop(roomId);
     
     broadcastToRoom(roomId, {
         type: 'playerJoin',
         userId: userId,
-        name: message.name
+        name: playerName
     });
     
     sendPlayersList(roomId);
     
-    console.log(`${message.name} 加入了房间 ${roomId}`);
+    notifyFriendsOnline(userId, playerName);
+    
+    if (friendMap.has(userId)) {
+        const friendList = [];
+        for (const fid of friendMap.get(userId)) {
+            const online = playerOnlineMap.get(fid);
+            const friendName = online ? online.name : getFriendName(fid);
+            friendList.push({ userId: fid, name: friendName, online: !!online, roomId: online ? online.roomId : null });
+        }
+        ws.send(JSON.stringify({ type: 'friendList', friends: friendList }));
+    }
+    
+    console.log(`${playerName} 加入了房间 ${roomId}`);
 }
 
 function handleUpdate(ws, message) {
@@ -1196,7 +1398,179 @@ function handleDisconnect(ws) {
                 sendPlayersList(ws.roomId);
             }
         }
+        
+        if (ws.playerName) {
+            registeredNames.delete(ws.playerName);
+        }
+        if (ws.userId) {
+            playerOnlineMap.delete(ws.userId);
+            notifyFriendsOffline(ws.userId);
+        }
     }
+}
+
+function notifyFriendsOnline(userId, playerName) {
+    console.log(`[notifyFriendsOnline] userId=${userId} name=${playerName}`);
+    if (!friendMap.has(userId)) {
+        console.log(`[notifyFriendsOnline] No friends for userId=${userId}`);
+        return;
+    }
+    console.log(`[notifyFriendsOnline] Friends of ${playerName}:`, [...friendMap.get(userId)]);
+    for (const fid of friendMap.get(userId)) {
+        const online = playerOnlineMap.get(fid);
+        if (online && online.ws) {
+            try {
+                online.ws.send(JSON.stringify({ type: 'friendOnline', userId: userId, name: playerName }));
+                console.log(`[notifyFriendsOnline] Sent friendOnline to ${online.name} (${fid})`);
+            } catch(e) {
+                console.log(`[notifyFriendsOnline] Error sending to ${fid}:`, e.message);
+            }
+        }
+    }
+}
+
+function notifyFriendsOffline(userId) {
+    console.log(`[notifyFriendsOffline] userId=${userId}`);
+    for (const [fid, friends] of friendMap) {
+        if (friends.has(userId)) {
+            const online = playerOnlineMap.get(fid);
+            if (online && online.ws) {
+                try {
+                    online.ws.send(JSON.stringify({ type: 'friendOffline', userId: userId }));
+                    console.log(`[notifyFriendsOffline] Sent friendOffline to ${online.name} (${fid})`);
+                } catch(e) {
+                    console.log(`[notifyFriendsOffline] Error sending to ${fid}:`, e.message);
+                }
+            }
+        }
+    }
+}
+
+function getFriendName(userId) {
+    for (const [rid, room] of rooms) {
+        const p = room.get(userId);
+        if (p) return p.name;
+    }
+    return userId;
+}
+
+function handleAddFriend(ws, message) {
+    console.log(`[handleAddFriend] userId=${ws.userId} target=${message.targetName}`);
+    if (!ws.userId) return;
+    const targetName = message.targetName;
+    
+    let targetUserId = null;
+    for (const [uid, info] of playerOnlineMap) {
+        if (info.name === targetName) {
+            targetUserId = uid;
+            break;
+        }
+    }
+    
+    if (!targetUserId) {
+        console.log(`[handleAddFriend] FAIL - target not found: ${targetName}`);
+        ws.send(JSON.stringify({ type: 'addFriendError', message: '玩家不存在或不在线' }));
+        return;
+    }
+    
+    if (targetUserId === ws.userId) {
+        console.log(`[handleAddFriend] FAIL - cannot add self`);
+        ws.send(JSON.stringify({ type: 'addFriendError', message: '不能添加自己为好友' }));
+        return;
+    }
+    
+    if (!friendMap.has(ws.userId)) {
+        friendMap.set(ws.userId, new Set());
+    }
+    if (friendMap.get(ws.userId).has(targetUserId)) {
+        console.log(`[handleAddFriend] FAIL - already friends: ${targetName}`);
+        ws.send(JSON.stringify({ type: 'addFriendError', message: '已经是好友' }));
+        return;
+    }
+    
+    friendMap.get(ws.userId).add(targetUserId);
+    console.log(`[handleAddFriend] SUCCESS - added ${targetName} (${targetUserId})`);
+    
+    const friendList = [];
+    for (const fid of friendMap.get(ws.userId)) {
+        const online = playerOnlineMap.get(fid);
+        const friendName = online ? online.name : getFriendName(fid);
+        friendList.push({ userId: fid, name: friendName, online: !!online, roomId: online ? online.roomId : null });
+    }
+    console.log(`[handleAddFriend] Sending friendList to ${ws.userId}, count=${friendList.length}`);
+    ws.send(JSON.stringify({ type: 'friendList', friends: friendList }));
+}
+
+function handleRemoveFriend(ws, message) {
+    console.log(`[handleRemoveFriend] userId=${ws.userId} targetUserId=${message.targetUserId}`);
+    if (!ws.userId || !friendMap.has(ws.userId)) return;
+    friendMap.get(ws.userId).delete(message.targetUserId);
+    console.log(`[handleRemoveFriend] Removed, remaining=${friendMap.get(ws.userId).size}`);
+}
+
+function handleJoinFriendRoom(ws, message) {
+    console.log(`[handleJoinFriendRoom] userId=${ws.userId} friendUserId=${message.friendUserId} currentRoom=${ws.roomId}`);
+    const friendInfo = playerOnlineMap.get(message.friendUserId);
+    if (!friendInfo) {
+        console.log(`[handleJoinFriendRoom] FAIL - friend not online`);
+        ws.send(JSON.stringify({ type: 'error', message: '好友不在线' }));
+        return;
+    }
+    
+    if (friendInfo.roomId === ws.roomId) {
+        console.log(`[handleJoinFriendRoom] FAIL - already in same room`);
+        ws.send(JSON.stringify({ type: 'error', message: '已经在同一个房间' }));
+        return;
+    }
+    
+    console.log(`[handleJoinFriendRoom] Switching room ${ws.roomId} -> ${friendInfo.roomId}`);
+    const oldRoomId = ws.roomId;
+    
+    if (oldRoomId && rooms.has(oldRoomId)) {
+        const oldRoom = rooms.get(oldRoomId);
+        if (oldRoom.has(ws.userId)) {
+            broadcastToRoom(oldRoomId, {
+                type: 'playerLeave',
+                userId: ws.userId,
+                name: ws.playerName
+            });
+            oldRoom.delete(ws.userId);
+            if (oldRoom.size === 0) {
+                stopGameLoop(oldRoomId);
+            }
+        }
+    }
+    
+    const newRoomId = friendInfo.roomId;
+    const newRoom = rooms.get(newRoomId);
+    newRoom.set(ws.userId, {
+        id: ws.userId,
+        name: ws.playerName,
+        color: '#e74c3c',
+        ws: ws,
+        x: Math.random() * (MAP_WIDTH - 400) + 200,
+        y: Math.random() * (MAP_HEIGHT - 400) + 200,
+        angle: 0,
+        health: 100,
+        maxHealth: 100,
+        kills: 0,
+        exp: 0,
+        inVehicle: false
+    });
+    
+    ws.roomId = newRoomId;
+    playerOnlineMap.get(ws.userId).roomId = newRoomId;
+    
+    ws.send(JSON.stringify({ type: 'officialRoomJoined', roomId: newRoomId }));
+    
+    broadcastToRoom(newRoomId, {
+        type: 'playerJoin',
+        userId: ws.userId,
+        name: ws.playerName
+    });
+    
+    sendPlayersList(newRoomId);
+    console.log(`[handleJoinFriendRoom] DONE - ${ws.playerName} joined ${newRoomId}`);
 }
 
 process.on('uncaughtException', (error) => {

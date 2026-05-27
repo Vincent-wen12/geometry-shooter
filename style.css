@@ -90,6 +90,38 @@ body {
     border-color: #555;
 }
 
+#terrain-group {
+    margin-top: 5px;
+}
+
+.terrain-selector {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+}
+
+.terrain-option {
+    padding: 8px 10px;
+    border: 2px solid #ccc;
+    border-radius: 8px;
+    background: #fff;
+    color: #555;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.terrain-option:hover {
+    border-color: #888;
+    background: #f0f0f0;
+}
+
+.terrain-option.active {
+    border-color: #444;
+    background: #444;
+    color: #fff;
+}
+
 .start-button {
     padding: 16px;
     border: none;
@@ -652,4 +684,343 @@ body {
     color: white;
     font-size: 16px;
     cursor: pointer;
+}
+
+/* ========== 好友面板 ========== */
+.friend-panel {
+    position: fixed;
+    bottom: 120px;
+    left: 10px;
+    z-index: 20;
+    background: rgba(0,0,0,0.25);
+    border-radius: 10px;
+    padding: 8px;
+    backdrop-filter: blur(6px);
+    max-width: 220px;
+}
+
+.friend-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    color: #eee;
+    font-size: 13px;
+    font-weight: 600;
+    margin-bottom: 6px;
+    padding: 0 4px;
+}
+
+.friend-add {
+    display: flex;
+    gap: 4px;
+}
+
+.friend-add input {
+    width: 100px;
+    background: rgba(255,255,255,0.1);
+    border: 1px solid rgba(255,255,255,0.2);
+    border-radius: 4px;
+    color: white;
+    padding: 2px 6px;
+    font-size: 11px;
+    outline: none;
+}
+
+.friend-add input:focus {
+    border-color: rgba(255,255,255,0.5);
+}
+
+#btn-add-friend {
+    background: #555;
+    border: none;
+    color: white;
+    border-radius: 4px;
+    cursor: pointer;
+    width: 22px;
+    height: 22px;
+    font-size: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    transition: background 0.2s;
+}
+
+#btn-add-friend:hover {
+    background: #333;
+}
+
+.friend-list {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.friend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 6px;
+    border-radius: 5px;
+    background: rgba(255,255,255,0.06);
+    font-size: 12px;
+    color: #ccc;
+}
+
+.friend-item .friend-status {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #666;
+    flex-shrink: 0;
+}
+
+.friend-item.online .friend-status {
+    background: #2ecc71;
+    box-shadow: 0 0 4px rgba(46,204,113,0.5);
+}
+
+.friend-item.offline .friend-status {
+    background: #666;
+}
+
+.friend-item .friend-name {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.friend-join-btn {
+    background: #555;
+    border: none;
+    color: white;
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 11px;
+    padding: 2px 6px;
+    transition: background 0.2s;
+}
+
+.friend-join-btn:hover {
+    background: #333;
+}
+
+.friend-remove-btn {
+    background: none;
+    border: none;
+    color: #888;
+    cursor: pointer;
+    font-size: 14px;
+    padding: 0 2px;
+    transition: color 0.2s;
+}
+
+.friend-remove-btn:hover {
+    color: #333;
+}
+
+/* ========== UI黑白风格（带动画） ========== */
+#start-screen {
+    background: #ffffff;
+}
+
+.start-content {
+    background: #f5f5f5;
+    border: 2px solid #ddd;
+    border-radius: 15px;
+    animation: fadeIn 0.4s ease-out;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(15px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.game-title h1 {
+    font-size: 42px;
+    margin-bottom: 10px;
+    color: #333;
+    animation: titlePulse 3s ease-in-out infinite;
+}
+
+@keyframes titlePulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.6; }
+}
+
+.game-title .subtitle {
+    color: #666;
+}
+
+.start-button {
+    background: #444;
+    border-radius: 10px;
+    transition: transform 0.2s, background 0.2s, box-shadow 0.2s;
+}
+
+.start-button:hover {
+    background: #222;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+
+.input-group input {
+    background: #fff;
+    border: 2px solid #ccc;
+    color: #333;
+    border-radius: 8px;
+    transition: border-color 0.2s;
+}
+
+.input-group input:focus {
+    border-color: #555;
+}
+
+.input-group label {
+    color: #555;
+}
+
+.official-button {
+    background: #333;
+    border-radius: 10px;
+    transition: transform 0.2s, background 0.2s, box-shadow 0.2s;
+}
+
+.official-button:hover {
+    background: #111;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+}
+
+/* HUD */
+#hud {
+    background: rgba(255,255,255,0.9);
+    border: 1px solid #ddd;
+    border-radius: 10px;
+    padding: 10px 14px;
+}
+
+.info-section {
+    background: #fafafa;
+    border: 1px solid #eee;
+    border-radius: 10px;
+    animation: fadeIn 0.3s ease-out;
+}
+
+.info-section h3 {
+    color: #333;
+}
+
+.info-section li {
+    color: #555;
+}
+
+.footer {
+    color: #999;
+    border-top: 1px solid #eee;
+}
+
+.players-list {
+    background: rgba(255,255,255,0.9);
+    border: 1px solid #ddd;
+    border-radius: 10px;
+    color: #333;
+}
+
+.players-list h4 {
+    color: #333;
+}
+
+.players-list .player-item {
+    background: #f5f5f5;
+    color: #333;
+    transition: background 0.2s;
+}
+
+.players-list .player-item:hover {
+    background: #eee;
+}
+
+.kill-feed .kill-item {
+    background: rgba(0,0,0,0.7);
+    border-left: 3px solid #888;
+    color: #eee;
+    animation: killSlideIn 0.25s ease-out;
+}
+
+@keyframes killSlideIn {
+    from { opacity: 0; transform: translateX(-20px); }
+    to { opacity: 1; transform: translateX(0); }
+}
+
+.weapon-bar {
+    background: rgba(255,255,255,0.85);
+    border: 1px solid #ddd;
+    border-radius: 12px;
+    animation: fadeIn 0.3s ease-out;
+}
+
+.weapon-slot {
+    background: #f5f5f5;
+    border: 2px solid #ddd;
+    color: #888;
+    transition: border-color 0.2s, background 0.2s, color 0.2s, box-shadow 0.2s;
+}
+
+.weapon-slot:hover {
+    border-color: #bbb;
+    background: #eee;
+}
+
+.weapon-slot.active {
+    border-color: #333;
+    background: #333;
+    color: white;
+    box-shadow: 0 0 8px rgba(0,0,0,0.2);
+}
+
+.music-button, .lang-btn {
+    background: #f0f0f0;
+    border: 1px solid #ddd;
+    color: #555;
+    transition: background 0.2s, color 0.2s;
+}
+
+.music-button:hover, .lang-btn:hover {
+    background: #ddd;
+}
+
+.lang-btn.active {
+    background: #333;
+    border-color: #333;
+    color: white;
+}
+
+.divider {
+    color: #999;
+}
+
+.divider::before,
+.divider::after {
+    background: #ddd;
+}
+
+.chat-messages {
+    background: rgba(255,255,255,0.15);
+}
+
+.chat-message {
+    animation: chatFadeIn 0.2s ease-out;
+}
+
+@keyframes chatFadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+.friend-panel {
+    background: rgba(255,255,255,0.85);
+    border: 1px solid #ddd;
+    border-radius: 10px;
 }

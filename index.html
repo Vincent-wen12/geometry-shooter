@@ -31,6 +31,16 @@
                     <input type="text" id="room-id" data-i18n-placeholder="roomIdPlaceholder" placeholder="输入房间ID (留空单人模式)">
                 </div>
                 
+                <div class="input-group" id="terrain-group">
+                    <label>地形选择</label>
+                    <div class="terrain-selector">
+                        <button class="terrain-option active" data-terrain="grassland">🌿 草原</button>
+                        <button class="terrain-option" data-terrain="desert">🏜️ 沙漠</button>
+                        <button class="terrain-option" data-terrain="mountains">⛰️ 山川</button>
+                        <button class="terrain-option" data-terrain="rivers">🌊 河流</button>
+                    </div>
+                </div>
+                
                 <button id="btn-start" class="start-button" data-i18n="startGame">开始游戏</button>
             </div>
             
@@ -128,6 +138,16 @@
             <div class="chat-input-wrapper">
                 <input type="text" id="chat-input" data-i18n-placeholder="chatPlaceholder" placeholder="按 Enter 发送消息...">
             </div>
+        </div>
+        <div id="friend-panel" class="friend-panel">
+            <div class="friend-header">
+                <span>好友</span>
+                <div class="friend-add">
+                    <input type="text" id="friend-name-input" placeholder="输入玩家名...">
+                    <button id="btn-add-friend">+</button>
+                </div>
+            </div>
+            <div id="friend-list" class="friend-list"></div>
         </div>
         <div id="weapon-bar" class="weapon-bar">
             <div id="weapon-0" class="weapon-slot active" data-weapon="pistol" title="手枪">1</div>

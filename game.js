@@ -528,11 +528,16 @@ class Game {
         
         this.player = null;
         this.players = new Map();
+        this.friends = [];
         this.bullets = [];
+        this.enemyBullets = [];
         this.enemies = [];
+        this.obstacles = [];
         this.particles = [];
         this.loots = [];
         this.damageTexts = [];
+        this.dashCooldown = 0;
+        this.dashTimer = 0;
         
         this.keys = {};
         this.mouseX = 0;
@@ -545,8 +550,8 @@ class Game {
         this.isMultiplayer = false;
         
         // 大地图系统
-        this.mapWidth = 3000;
-        this.mapHeight = 2000;
+        this.mapWidth = 5000;
+        this.mapHeight = 4000;
         this.cameraX = 0;
         this.cameraY = 0;
         this.cameraSpeed = 0.1;
@@ -558,8 +563,10 @@ class Game {
         
         // 性能优化
         this.maxParticles = 150;
-        this.maxEnemies = 6;
+        this.maxEnemies = 12;
         this.updateInterval = 50;
+        
+        this.selectedTerrain = 'grassland';
         
         // 昼夜系统
         this.timeOfDay = 0;
@@ -583,6 +590,11 @@ class Game {
             { type: 'helicopter', name: '直升机', radius: 30, speed: 6, damage: 15, color: '#e67e22', fireRate: 300 }
         ];
         
+        // 障碍物系统
+        this.obstacles = [];
+        this.dashCooldown = 0;
+        this.dashTimer = 0;
+        
         // RPG系统
         this.loots = [];
         this.lootTypes = [
@@ -598,28 +610,10 @@ class Game {
             '#8e44ad', '#16a085', '#e67e22', '#2c3e50'
         ];
         
-        // 地形元素
         this.terrainElements = [];
-        for (let i = 0; i < 50; i++) {
-            this.terrainElements.push({
-                x: Math.random() * 3000,
-                y: Math.random() * 2000,
-                size: 20 + Math.random() * 50,
-                type: Math.random() > 0.6 ? 'tree' : (Math.random() > 0.5 ? 'rock' : 'obstacle')
-            });
-        }
-        
-        this.regions = this.generateRegions();
-
+        this.terrainDecorations = [];
         this.grassPositions = [];
-        for (let i = 0; i < 300; i++) {
-            this.grassPositions.push({
-                x: Math.random() * this.mapWidth,
-                y: Math.random() * this.mapHeight,
-                r: 1 + Math.random() * 2,
-                shade: 0.5 + Math.random() * 0.3
-            });
-        }
+        this.regions = [];
 
         // 动画状态
         this.walkTime = 0;
@@ -731,13 +725,22 @@ class Game {
         this.init();
     }
      
-     generateRegions() {
+     generateRegions(terrain) {
          const regions = [];
          const regionSize = 500;
          
          for (let x = 0; x < this.mapWidth; x += regionSize) {
              for (let y = 0; y < this.mapHeight; y += regionSize) {
-                 const type = Math.random() > 0.7 ? 'forest' : (Math.random() > 0.5 ? 'rocks' : 'open');
+                 let type;
+                 if (terrain === 'desert') {
+                     type = Math.random() > 0.7 ? 'dunes' : (Math.random() > 0.5 ? 'cactus' : 'sand');
+                 } else if (terrain === 'mountains') {
+                     type = Math.random() > 0.6 ? 'peak' : (Math.random() > 0.5 ? 'rocky' : 'slope');
+                 } else if (terrain === 'rivers') {
+                     type = Math.random() > 0.8 ? 'water' : (Math.random() > 0.4 ? 'shore' : 'land');
+                 } else {
+                     type = Math.random() > 0.7 ? 'forest' : (Math.random() > 0.5 ? 'rocks' : 'open');
+                 }
                  regions.push({
                      x: x,
                      y: y,
@@ -748,6 +751,108 @@ class Game {
              }
          }
          return regions;
+     }
+     
+     generateTerrain(terrainType) {
+        this.terrainType = terrainType || 'grassland';
+        this.terrainElements = [];
+        this.terrainDecorations = [];
+        this.grassPositions = [];
+        
+        const terrain = this.terrainType;
+        
+        if (terrain === 'desert') {
+            for (let i = 0; i < 40; i++) {
+                this.terrainElements.push({
+                    x: Math.random() * this.mapWidth,
+                    y: Math.random() * this.mapHeight,
+                    size: 15 + Math.random() * 40,
+                    type: Math.random() > 0.5 ? 'cactus' : 'rock'
+                });
+            }
+            for (let i = 0; i < 200; i++) {
+                this.grassPositions.push({
+                    x: Math.random() * this.mapWidth,
+                    y: Math.random() * this.mapHeight,
+                    r: 3 + Math.random() * 6,
+                    shade: 0.3 + Math.random() * 0.3
+                });
+            }
+            for (let i = 0; i < 5; i++) {
+                this.terrainDecorations.push({
+                    x: 300 + Math.random() * (this.mapWidth - 600),
+                    y: 300 + Math.random() * (this.mapHeight - 600),
+                    radius: 40 + Math.random() * 60,
+                    type: 'oasis'
+                });
+            }
+        } else if (terrain === 'mountains') {
+            for (let i = 0; i < 30; i++) {
+                this.terrainElements.push({
+                    x: Math.random() * this.mapWidth,
+                    y: Math.random() * this.mapHeight,
+                    size: 40 + Math.random() * 80,
+                    type: 'mountain',
+                    peakX: (Math.random() - 0.5) * 30,
+                    snowLine: 0.3 + Math.random() * 0.3
+                });
+            }
+            for (let i = 0; i < 150; i++) {
+                this.grassPositions.push({
+                    x: Math.random() * this.mapWidth,
+                    y: Math.random() * this.mapHeight,
+                    r: 2 + Math.random() * 4,
+                    shade: 0.4 + Math.random() * 0.3
+                });
+            }
+        } else if (terrain === 'rivers') {
+            const riverY = 500 + Math.random() * (this.mapHeight - 1000);
+            for (let i = 0; i < 3; i++) {
+                this.terrainDecorations.push({
+                    x: 0,
+                    y: riverY + i * 400 + Math.random() * 200,
+                    width: this.mapWidth,
+                    height: 60 + Math.random() * 40,
+                    type: 'river'
+                });
+            }
+            for (let i = 0; i < 20; i++) {
+                this.terrainElements.push({
+                    x: Math.random() * this.mapWidth,
+                    y: Math.random() * this.mapHeight,
+                    size: 15 + Math.random() * 30,
+                    type: 'tree'
+                });
+            }
+            for (let i = 0; i < 150; i++) {
+                this.grassPositions.push({
+                    x: Math.random() * this.mapWidth,
+                    y: Math.random() * this.mapHeight,
+                    r: 1 + Math.random() * 3,
+                    shade: 0.4 + Math.random() * 0.3
+                });
+            }
+        } else {
+            for (let i = 0; i < 50; i++) {
+                this.terrainElements.push({
+                    x: Math.random() * this.mapWidth,
+                    y: Math.random() * this.mapHeight,
+                    size: 20 + Math.random() * 50,
+                    type: Math.random() > 0.6 ? 'tree' : (Math.random() > 0.5 ? 'rock' : 'obstacle')
+                });
+            }
+            for (let i = 0; i < 300; i++) {
+                this.grassPositions.push({
+                    x: Math.random() * this.mapWidth,
+                    y: Math.random() * this.mapHeight,
+                    r: 1 + Math.random() * 2,
+                    shade: 0.5 + Math.random() * 0.3
+                });
+            }
+        }
+        
+        this.regions = this.generateRegions(terrain);
+        this.terrainTime = 0;
      }
     
     init() {
@@ -772,6 +877,9 @@ class Game {
             }
             if (e.key >= '1' && e.key <= '7') {
                 this.switchWeapon(parseInt(e.key) - 1);
+            }
+            if ((e.key === 'Shift' || e.code === 'ShiftLeft' || e.code === 'ShiftRight') && this.running && this.player) {
+                this.triggerDash();
             }
         });
         window.addEventListener('keyup', (e) => {
@@ -849,6 +957,14 @@ class Game {
         document.getElementById('btn-lang-zh').addEventListener('click', () => setLang('zh'));
         document.getElementById('btn-lang-en').addEventListener('click', () => setLang('en'));
         updateLang();
+        
+        document.querySelectorAll('.terrain-option').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.terrain-option').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                this.selectedTerrain = btn.dataset.terrain;
+            });
+        });
         
         document.getElementById('btn-quit').addEventListener('click', () => {
             try {
@@ -1047,7 +1163,7 @@ class Game {
         }
 
         let nearest = null;
-        let nearestDist = 80;
+        let nearestDist = 120;
         for (const v of this.vehicles) {
             if (v.occupied) continue;
             const dist = Math.hypot(this.player.x - v.x, this.player.y - v.y);
@@ -1100,6 +1216,105 @@ class Game {
                 chatInput.value = '';
             }
         });
+        
+        this.setupFriendPanel();
+    }
+    
+    setupFriendPanel() {
+        const addBtn = document.getElementById('btn-add-friend');
+        const nameInput = document.getElementById('friend-name-input');
+        if (!addBtn || !nameInput) return;
+        
+        addBtn.addEventListener('click', () => {
+            const targetName = nameInput.value.trim();
+            if (targetName && window.network && window.network.connected) {
+                console.log(`[FriendPanel] Add friend button clicked, target=${targetName}`);
+                window.network.addFriend(targetName);
+                nameInput.value = '';
+            }
+        });
+        
+        nameInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                addBtn.click();
+            }
+        });
+        
+        this.updateFriendList();
+    }
+    
+    updateFriendList() {
+        console.log(`[FriendPanel] updateFriendList called, friends count=${this.friends ? this.friends.length : 0}`);
+        const list = document.getElementById('friend-list');
+        if (!list) return;
+        
+        const panel = document.getElementById('friend-panel');
+        if (panel) {
+            panel.style.display = 'block';
+        }
+        
+        if (!this.friends || this.friends.length === 0) {
+            list.innerHTML = '<div class="friend-empty" style="color:#aaa;font-size:11px;padding:4px;text-align:center;">暂无好友，输入名字添加</div>';
+            return;
+        }
+        
+        let html = '';
+        for (const f of this.friends) {
+            const onlineClass = f.online ? 'online' : 'offline';
+            html += `<div class="friend-item ${onlineClass}">
+                <span class="friend-status"></span>
+                <span class="friend-name">${f.name}</span>
+                ${f.online ? '<button class="friend-join-btn">加入</button>' : ''}
+                <button class="friend-remove-btn">×</button>
+            </div>`;
+        }
+        list.innerHTML = html;
+        
+        const items = list.querySelectorAll('.friend-item');
+        items.forEach((item, i) => {
+            const f = this.friends[i];
+            const joinBtn = item.querySelector('.friend-join-btn');
+            if (joinBtn) {
+                joinBtn.addEventListener('click', () => {
+                    console.log(`[FriendPanel] Join button clicked for friend userId=${f.userId} name=${f.name}`);
+                    this.joinFriendRoom(f.userId);
+                });
+            }
+            const removeBtn = item.querySelector('.friend-remove-btn');
+            if (removeBtn) {
+                removeBtn.addEventListener('click', () => {
+                    console.log(`[FriendPanel] Remove button clicked for friend userId=${f.userId} name=${f.name}`);
+                    window.network.removeFriend(f.userId);
+                    this.friends = this.friends.filter(x => x.userId !== f.userId);
+                    this.updateFriendList();
+                });
+            }
+        });
+        
+        this.showFriendInPlayerList();
+    }
+    
+    showFriendInPlayerList() {
+        const friendNames = new Set(this.friends.filter(f => f.online).map(f => f.name));
+        const items = document.querySelectorAll('.players-list .player-item');
+        items.forEach(item => {
+            const nameSpan = item.querySelector('span');
+            if (nameSpan && friendNames.has(nameSpan.textContent)) {
+                if (!nameSpan.textContent.startsWith('⭐')) {
+                    nameSpan.textContent = '⭐ ' + nameSpan.textContent;
+                }
+            }
+        });
+    }
+    
+    joinFriendRoom(friendUserId) {
+        console.log(`[FriendPanel] joinFriendRoom called, friendUserId=${friendUserId}, roomId=${this.roomId}`);
+        if (!window.network || !window.network.connected) {
+            console.log(`[FriendPanel] FAIL - not connected to network`);
+            return;
+        }
+        window.network.send({ type: 'joinFriendRoom', friendUserId: friendUserId });
+        console.log(`[FriendPanel] Sent joinFriendRoom message to server`);
     }
     
     sendChat(message) {
@@ -1181,7 +1396,9 @@ class Game {
         
         this.kills = 0;
         this.bullets = [];
+        this.enemyBullets = [];
         this.enemies = [];
+        this.obstacles = [];
         this.particles = [];
         this.loots = [];
         this.damageTexts = [];
@@ -1218,9 +1435,17 @@ class Game {
         
         if (!roomId) {
             console.log('[startGame] Spawning enemies (single player mode)');
+            const terrainType = this.selectedTerrain || 'grassland';
+            this.generateTerrain(terrainType);
             this.spawnEnemies();
+            this.spawnObstacles();
         } else {
-            console.log('[startGame] Multiplayer mode, skipping enemy spawn');
+            console.log('[startGame] Multiplayer mode, skipping terrain/enemy spawn');
+            this.terrainType = null;
+            this.terrainElements = [];
+            this.terrainDecorations = [];
+            this.grassPositions = [];
+            this.regions = [];
         }
         console.log('[startGame] Starting game loop, player at:', this.player?.x, this.player?.y);
         this.gameLoop();
@@ -1236,23 +1461,39 @@ class Game {
     spawnEnemies() {
         setInterval(() => {
             if (!this.running) return;
-            // 减少最大敌人数量以提升性能
             if (this.enemies.length < 8) {
                 const side = Math.floor(Math.random() * 4);
                 let x, y;
+                const margin = 50;
+                const spawnRange = 600;
                 
                 switch(side) {
-                    case 0: x = -30; y = Math.random() * this.mapHeight; break;
-                    case 1: x = this.mapWidth + 30; y = Math.random() * this.mapHeight; break;
-                    case 2: x = Math.random() * this.mapWidth; y = -30; break;
-                    case 3: x = Math.random() * this.mapWidth; y = this.mapHeight + 30; break;
+                    case 0:
+                        x = this.player.x - this.width / 2 - margin - Math.random() * spawnRange;
+                        y = this.player.y - this.height / 2 + Math.random() * this.height;
+                        break;
+                    case 1:
+                        x = this.player.x + this.width / 2 + margin + Math.random() * spawnRange;
+                        y = this.player.y - this.height / 2 + Math.random() * this.height;
+                        break;
+                    case 2:
+                        x = this.player.x - this.width / 2 + Math.random() * this.width;
+                        y = this.player.y - this.height / 2 - margin - Math.random() * spawnRange;
+                        break;
+                    case 3:
+                        x = this.player.x - this.width / 2 + Math.random() * this.width;
+                        y = this.player.y + this.height / 2 + margin + Math.random() * spawnRange;
+                        break;
                 }
+                
+                x = Math.max(30, Math.min(this.mapWidth - 30, x));
+                y = Math.max(30, Math.min(this.mapHeight - 30, y));
                 
                 this.enemies.push({
                     x: x,
                     y: y,
                     radius: 15 + Math.random() * 15,
-                    speed: 1.5 + Math.random() * 2,
+                    speed: 2.5 + Math.random() * 3,
                     health: 30 + Math.random() * 30,
                     maxHealth: 0,
                     hitFlash: 0,
@@ -1262,7 +1503,80 @@ class Game {
                 const enemy = this.enemies[this.enemies.length - 1];
                 enemy.maxHealth = enemy.health;
             }
-        }, 2500); // 增加生成间隔
+        }, 2500);
+    }
+    
+    spawnObstacles() {
+        const terrain = this.terrainType || 'grassland';
+        let obsColors;
+        let count;
+        
+        if (terrain === 'desert') {
+            obsColors = ['#8B7355', '#A0522D', '#CD853F', '#D2B48C', '#B8860B'];
+            count = 15 + Math.floor(Math.random() * 8);
+        } else if (terrain === 'mountains') {
+            obsColors = ['#555', '#666', '#777', '#5a5a5a', '#4a4a4a'];
+            count = 22 + Math.floor(Math.random() * 10);
+        } else if (terrain === 'rivers') {
+            obsColors = ['#5F9EA0', '#6B8E23', '#556B2F', '#8FBC8F', '#7B8D6B'];
+            count = 18 + Math.floor(Math.random() * 8);
+        } else {
+            obsColors = ['#8B7355', '#A0522D', '#6B4226', '#556B2F', '#5F9EA0', '#B8860B'];
+            count = 20 + Math.floor(Math.random() * 10);
+        }
+        
+        for (let i = 0; i < count; i++) {
+            const radius = 20 + Math.random() * 35;
+            let x, y;
+            let attempts = 0;
+            do {
+                x = 100 + Math.random() * (this.mapWidth - 200);
+                y = 100 + Math.random() * (this.mapHeight - 200);
+                attempts++;
+            } while (attempts < 20 && Math.hypot(x - this.player.x, y - this.player.y) < 300);
+            
+            if (terrain === 'rivers') {
+                const nearRiver = this.terrainDecorations.some(d => 
+                    d.type === 'river' && Math.abs(y - d.y) < d.height * 0.7
+                );
+                if (nearRiver) continue;
+            }
+            
+            this.obstacles.push({
+                id: 'obs_' + i,
+                x, y, radius,
+                health: 100 + Math.random() * 150,
+                maxHealth: 0,
+                color: obsColors[Math.floor(Math.random() * obsColors.length)],
+                angle: Math.random() * Math.PI * 2,
+                shape: Math.random() > 0.5 ? 'circle' : 'rect'
+            });
+            this.obstacles[i].maxHealth = this.obstacles[i].health;
+        }
+    }
+    
+    triggerDash() {
+        if (this.dashCooldown > 0 || this.dashTimer > 0 || this.player.health <= 0) return;
+        if (this.currentVehicle) return;
+        const dx = Math.cos(this.player.angle);
+        const dy = Math.sin(this.player.angle);
+        if (Math.abs(dx) < 0.01 && Math.abs(dy) < 0.01) return;
+        this.dashTimer = 10;
+        this.dashCooldown = 120;
+        this.player.vx = dx * 18;
+        this.player.vy = dy * 18;
+        for (let i = 0; i < 8; i++) {
+            this.particles.push({
+                x: this.player.x + (Math.random() - 0.5) * 20,
+                y: this.player.y + (Math.random() - 0.5) * 20,
+                vx: -dx * 2 + (Math.random() - 0.5) * 3,
+                vy: -dy * 2 + (Math.random() - 0.5) * 3,
+                life: 15 + Math.random() * 10,
+                maxLife: 25,
+                radius: 3 + Math.random() * 3,
+                color: '#aaa'
+            });
+        }
     }
     
     gameLoop() {
@@ -1281,6 +1595,8 @@ class Game {
         this.updatePlayer();
         this.updateBullets();
         this.updateEnemies();
+        this.updateObstacles();
+        this.updateEnemyBullets();
         this.updateParticles();
         this.updateLoots();
         this.updatePowerups();
@@ -1288,6 +1604,15 @@ class Game {
         this.updatePlayerEffects();
         this.updateUI();
         this.updateDamageTexts();
+        
+        if (this.dashCooldown > 0) this.dashCooldown--;
+        if (this.dashTimer > 0) {
+            this.dashTimer--;
+            if (this.dashTimer === 0) {
+                this.player.vx = 0;
+                this.player.vy = 0;
+            }
+        }
     }
     
     updateDayNight() {
@@ -1476,25 +1801,31 @@ class Game {
         const worldMouseY = this.mouseY + this.cameraY;
         vehicle.angle = Math.atan2(worldMouseY - vehicle.y, worldMouseX - vehicle.x);
 
-        if (this.mouseDown && Date.now() - vehicle.lastFire > vehicle.fireRate) {
-            const newBullet = {
-                x: vehicle.x + Math.cos(vehicle.angle) * vehicle.radius,
-                y: vehicle.y + Math.sin(vehicle.angle) * vehicle.radius,
-                vx: Math.cos(vehicle.angle) * 12,
-                vy: Math.sin(vehicle.angle) * 12,
-                radius: 8,
-                color: vehicle.color,
-                owner: 'vehicle',
-                damage: vehicle.damage,
-                angle: vehicle.angle,
-                rotSpeed: 0.3
-            };
-            this.bullets.push(newBullet);
+        const weapon = this.weapons[this.currentWeaponIndex];
+        if (this.mouseDown && Date.now() - vehicle.lastFire > weapon.shootCooldown) {
+            const baseAngle = vehicle.angle;
+            const spread = weapon.spread || 0;
+            for (let i = 0; i < (weapon.bulletCount || 1); i++) {
+                const angle = baseAngle + (spread ? (Math.random() - 0.5) * spread * 2 : 0);
+                const newBullet = {
+                    x: vehicle.x + Math.cos(angle) * vehicle.radius,
+                    y: vehicle.y + Math.sin(angle) * vehicle.radius,
+                    vx: Math.cos(angle) * weapon.bulletSpeed,
+                    vy: Math.sin(angle) * weapon.bulletSpeed,
+                    radius: weapon.bulletRadius || 6,
+                    color: this.player.color,
+                    owner: this.player.id,
+                    damage: weapon.damage,
+                    angle: angle,
+                    rotSpeed: 0.2 + Math.random() * 0.2
+                };
+                this.bullets.push(newBullet);
+            }
             vehicle.lastFire = Date.now();
             this.shootAnimTimer = 200;
             
-            if (this.isMultiplayer && window.network && window.network.connected) {
-                window.network.sendVehicleShoot(newBullet);
+            if (this.player.ammo <= 0) {
+                this.startReload();
             }
         }
 
@@ -1510,7 +1841,7 @@ class Game {
         for (const v of this.vehicles) {
             if (v.occupied) continue;
             const dist = Math.hypot(this.player.x - v.x, this.player.y - v.y);
-            if (dist < 80) {
+            if (dist < 120) {
                 this.nearbyVehicle = v;
                 this.vehicleEntryHint = __('enterVehicle') + ' ' + v.name;
                 break;
@@ -1981,6 +2312,29 @@ class Game {
                 continue;
             }
 
+            let hitObs = false;
+            for (const obs of this.obstacles) {
+                if (Math.hypot(bullet.x - obs.x, bullet.y - obs.y) < bullet.radius + obs.radius) {
+                    obs.health -= bullet.damage;
+                    this.spawnHitEffect(bullet.x, bullet.y, '#aaa');
+                    for (let k = 0; k < 3; k++) {
+                        this.particles.push({
+                            x: bullet.x + (Math.random() - 0.5) * 10,
+                            y: bullet.y + (Math.random() - 0.5) * 10,
+                            vx: (Math.random() - 0.5) * 3,
+                            vy: (Math.random() - 0.5) * 3,
+                            life: 15 + Math.random() * 10,
+                            maxLife: 25,
+                            radius: 2 + Math.random() * 3,
+                            color: '#999'
+                        });
+                    }
+                    hitObs = true;
+                    break;
+                }
+            }
+            if (hitObs) { this.bullets.splice(i, 1); continue; }
+
             for (let j = this.enemies.length - 1; j >= 0; j--) {
                 const enemy = this.enemies[j];
                 
@@ -2055,6 +2409,20 @@ class Game {
                     }
                     break;
                 }
+            }
+            
+            if (this.bullets[i] && !this.isMultiplayer) {
+                for (let oi = 0; oi < this.obstacles.length; oi++) {
+                    const obs = this.obstacles[oi];
+                    const dist = Math.hypot(bullet.x - obs.x, bullet.y - obs.y);
+                    if (dist < bullet.radius + obs.radius) {
+                        obs.health -= bullet.damage;
+                        this.bullets.splice(i, 1);
+                        this.spawnHitEffect(bullet.x, bullet.y, '#888');
+                        break;
+                    }
+                }
+                if (!this.bullets[i]) continue;
             }
 
             if (bullet.owner === this.player.id) {
@@ -2151,6 +2519,7 @@ class Game {
             if (enemy.hitFlash === undefined) enemy.hitFlash = 0;
             if (enemy.hitFlash > 0) enemy.hitFlash -= 16;
             if (enemy.hitFlash < 0) enemy.hitFlash = 0;
+            if (enemy.shootTimer === undefined) enemy.shootTimer = 40 + Math.random() * 60;
 
             const dx = this.player.x - enemy.x;
             const dy = this.player.y - enemy.y;
@@ -2160,13 +2529,27 @@ class Game {
             
             const dist = Math.sqrt(distSq);
             enemy.angle = Math.atan2(dy, dx);
-            
-            if (dist > 600) {
-                enemy.x += (dx / dist) * enemy.speed * 0.5;
-                enemy.y += (dy / dist) * enemy.speed * 0.5;
-            } else {
+            if (dist > 150) {
                 enemy.x += (dx / dist) * enemy.speed;
                 enemy.y += (dy / dist) * enemy.speed;
+            }
+            
+            if (dist < 800) {
+                enemy.shootTimer--;
+                if (enemy.shootTimer <= 0) {
+                    enemy.shootTimer = 40 + Math.random() * 60;
+                    const speed = 7 + Math.random() * 4;
+                    this.enemyBullets.push({
+                        x: enemy.x,
+                        y: enemy.y,
+                        vx: (dx / dist) * speed,
+                        vy: (dy / dist) * speed,
+                        radius: 4,
+                        damage: 5 + Math.floor(Math.random() * 6),
+                        angle: enemy.angle,
+                        life: 200
+                    });
+                }
             }
 
             const collisionDist = Math.hypot(this.player.x - enemy.x, this.player.y - enemy.y);
@@ -2180,6 +2563,79 @@ class Game {
                 if (this.player.health <= 0) {
                     this.gameOver();
                 }
+            }
+        }
+    }
+    
+    updateObstacles() {
+        if (this.isMultiplayer) return;
+        for (let i = this.obstacles.length - 1; i >= 0; i--) {
+            const obs = this.obstacles[i];
+            if (obs.health <= 0) {
+                for (let j = 0; j < 6; j++) {
+                    this.particles.push({
+                        x: obs.x + (Math.random() - 0.5) * obs.radius,
+                        y: obs.y + (Math.random() - 0.5) * obs.radius,
+                        vx: (Math.random() - 0.5) * 4, vy: (Math.random() - 0.5) * 4,
+                        life: 20 + Math.random() * 10, maxLife: 30,
+                        radius: 3 + Math.random() * 4, color: '#999'
+                    });
+                }
+                this.obstacles.splice(i, 1);
+                continue;
+            }
+            if (Math.hypot(obs.x - this.player.x, obs.y - this.player.y) < this.player.radius + obs.radius) {
+                const dx = this.player.x - obs.x;
+                const dy = this.player.y - obs.y;
+                const dist = Math.hypot(dx, dy) || 1;
+                this.player.x = obs.x + (dx / dist) * (this.player.radius + obs.radius);
+                this.player.y = obs.y + (dy / dist) * (this.player.radius + obs.radius);
+            }
+            for (const enemy of this.enemies) {
+                if (Math.hypot(enemy.x - obs.x, enemy.y - obs.y) < obs.radius + enemy.radius) {
+                    const dx = enemy.x - obs.x;
+                    const dy = enemy.y - obs.y;
+                    const dist = Math.hypot(dx, dy) || 1;
+                    enemy.x = obs.x + (dx / dist) * (obs.radius + enemy.radius);
+                }
+            }
+        }
+    }
+    
+    updateEnemyBullets() {
+        if (this.isMultiplayer) return;
+        for (let i = this.enemyBullets.length - 1; i >= 0; i--) {
+            const b = this.enemyBullets[i];
+            b.x += b.vx;
+            b.y += b.vy;
+            b.life--;
+            
+            if (b.x < -50 || b.x > this.mapWidth + 50 ||
+                b.y < -50 || b.y > this.mapHeight + 50 ||
+                b.life <= 0) {
+                this.enemyBullets.splice(i, 1);
+                continue;
+            }
+            
+            let hit = false;
+            for (const obs of this.obstacles) {
+                if (Math.hypot(b.x - obs.x, b.y - obs.y) < b.radius + obs.radius) {
+                    obs.health -= b.damage;
+                    this.spawnHitEffect(b.x, b.y, '#888');
+                    hit = true;
+                    break;
+                }
+            }
+            if (hit) { this.enemyBullets.splice(i, 1); continue; }
+            
+            const cd = Math.hypot(this.player.x - b.x, this.player.y - b.y);
+            if (cd < this.player.radius + b.radius) {
+                this.player.health -= b.damage;
+                this.playerHitFlash = 200;
+                this.enemyBullets.splice(i, 1);
+                if (this.sound) this.sound.playHurt();
+                if (this.player.health <= 0) this.gameOver();
+                continue;
             }
         }
     }
@@ -2384,11 +2840,13 @@ class Game {
         try { this.drawMap(); } catch(e) { console.error('drawMap:', e); }
         try { this.drawGrid(); } catch(e) { console.error('drawGrid:', e); }
         try { this.drawLoots(); } catch(e) { console.error('drawLoots:', e); }
+        try { this.drawObstacles(); } catch(e) { console.error('drawObstacles:', e); }
         try { this.drawParticles(); } catch(e) { console.error('drawParticles:', e); }
         try { this.drawPowerups(); } catch(e) { console.error('drawPowerups:', e); }
         try { this.drawVehicles(); } catch(e) { console.error('drawVehicles:', e); }
         try { this.drawPlayerEffects(); } catch(e) { console.error('drawPlayerEffects:', e); }
         try { this.drawBullets(); } catch(e) { console.error('drawBullets:', e); }
+        try { this.drawEnemyBullets(); } catch(e) { console.error('drawEnemyBullets:', e); }
         try { this.drawEnemies(); } catch(e) { console.error('drawEnemies:', e); }
         try { this.drawDamageTexts(); } catch(e) { console.error('drawDamageTexts:', e); }
         
@@ -2432,24 +2890,54 @@ class Game {
     }
     
     drawMap() {
-        // 根据昼夜系统改变背景
-        let bgColor;
+        const terrain = this.terrainType || 'grassland';
+        
+        if (!this.terrainType) {
+            const bgColor = this.getTerrainBgColor(30, 30, 35);
+            this.ctx.fillStyle = bgColor;
+            this.ctx.fillRect(0, 0, this.mapWidth, this.mapHeight);
+            this.drawMapBorder();
+            this.drawStars();
+            this.ctx.fillStyle = 'rgba(255,255,255,0.05)';
+            this.ctx.font = '24px Arial';
+            this.ctx.textAlign = 'center';
+            this.ctx.fillText('等待地形数据...', this.mapWidth / 2, this.mapHeight / 2);
+            return;
+        }
+        
+        if (this.terrainTime === undefined) this.terrainTime = 0;
+        this.terrainTime += 0.005;
+        
+        if (terrain === 'desert') {
+            this.drawDesertTerrain();
+        } else if (terrain === 'mountains') {
+            this.drawMountainTerrain();
+        } else if (terrain === 'rivers') {
+            this.drawRiverTerrain();
+        } else {
+            this.drawGrasslandTerrain();
+        }
+    }
+    
+    getTerrainBgColor(baseR, baseG, baseB) {
         if (this.isNight) {
             const darkness = (this.timeOfDay - 50) / 50;
-            const r = Math.floor(26 * (1 - darkness * 0.8));
-            const g = Math.floor(61 * (1 - darkness * 0.8));
-            const b = Math.floor(26 * (1 - darkness * 0.8));
-            bgColor = `rgb(${r}, ${g}, ${b})`;
-        } else {
-            const brightness = 1 - (this.timeOfDay / 50) * 0.3;
-            bgColor = `rgb(${Math.floor(26 * brightness)}, ${Math.floor(74 * brightness)}, ${Math.floor(26 * brightness)})`;
+            const r = Math.floor(baseR * (1 - darkness * 0.7));
+            const g = Math.floor(baseG * (1 - darkness * 0.7));
+            const b = Math.floor(baseB * (1 - darkness * 0.7));
+            return `rgb(${r}, ${g}, ${b})`;
         }
+        const brightness = 1 - (this.timeOfDay / 50) * 0.2;
+        return `rgb(${Math.floor(baseR * brightness)}, ${Math.floor(baseG * brightness)}, ${Math.floor(baseB * brightness)})`;
+    }
+    
+    drawGrasslandTerrain() {
+        const bgColor = this.getTerrainBgColor(26, 74, 26);
         this.ctx.fillStyle = bgColor;
         this.ctx.fillRect(0, 0, this.mapWidth, this.mapHeight);
         
-        // 绘制草地纹理
         if (!this.isNight) {
-            this.ctx.fillStyle = '#1e4d1e';
+            this.ctx.fillStyle = '#1e5c1e';
             for (const g of this.grassPositions) {
                 this.ctx.globalAlpha = g.shade;
                 this.ctx.fillRect(g.x, g.y, g.r, g.r);
@@ -2457,6 +2945,225 @@ class Game {
             this.ctx.globalAlpha = 1;
         }
         
+        this.drawTerrainElementsGrassland();
+        this.drawMapBorder();
+        this.drawStars();
+    }
+    
+    drawDesertTerrain() {
+        const bgColor = this.getTerrainBgColor(194, 178, 128);
+        this.ctx.fillStyle = bgColor;
+        this.ctx.fillRect(0, 0, this.mapWidth, this.mapHeight);
+        
+        if (!this.isNight) {
+            for (const g of this.grassPositions) {
+                this.ctx.fillStyle = `rgba(210, 180, 100, ${g.shade * 0.4})`;
+                this.ctx.beginPath();
+                this.ctx.arc(g.x, g.y, g.r, 0, Math.PI * 2);
+                this.ctx.fill();
+            }
+        }
+        
+        for (const dec of this.terrainDecorations) {
+            if (dec.type === 'oasis') {
+                const pulse = Math.sin(this.terrainTime * 2 + dec.x) * 0.1 + 0.9;
+                this.ctx.fillStyle = `rgba(50, 120, 80, ${0.3 * pulse})`;
+                this.ctx.beginPath();
+                this.ctx.arc(dec.x, dec.y, dec.radius * pulse, 0, Math.PI * 2);
+                this.ctx.fill();
+                this.ctx.fillStyle = `rgba(100, 180, 140, ${0.2 * pulse})`;
+                this.ctx.beginPath();
+                this.ctx.arc(dec.x, dec.y, dec.radius * 0.6 * pulse, 0, Math.PI * 2);
+                this.ctx.fill();
+            }
+        }
+        
+        this.drawTerrainElementsDesert();
+        this.drawMapBorder();
+        this.drawStars();
+    }
+    
+    drawMountainTerrain() {
+        const bgColor = this.getTerrainBgColor(70, 75, 80);
+        this.ctx.fillStyle = bgColor;
+        this.ctx.fillRect(0, 0, this.mapWidth, this.mapHeight);
+        
+        if (!this.isNight) {
+            for (const g of this.grassPositions) {
+                this.ctx.fillStyle = `rgba(120, 110, 100, ${g.shade * 0.3})`;
+                this.ctx.fillRect(g.x, g.y, g.r, g.r);
+            }
+        }
+        
+        for (const element of this.terrainElements) {
+            if (element.type === 'mountain') {
+                const s = element.size;
+                const px = element.x;
+                const py = element.y;
+                const peakX = element.peakX || 0;
+                const snowLine = element.snowLine || 0.3;
+                
+                this.ctx.fillStyle = this.isNight ? '#3a3a3a' : '#5a5a5a';
+                this.ctx.beginPath();
+                this.ctx.moveTo(px - s, py + s * 0.3);
+                this.ctx.lineTo(px + peakX, py - s);
+                this.ctx.lineTo(px + s, py + s * 0.3);
+                this.ctx.closePath();
+                this.ctx.fill();
+                
+                this.ctx.fillStyle = this.isNight ? '#555' : '#8a8a8a';
+                this.ctx.beginPath();
+                this.ctx.moveTo(px + peakX * 0.5, py - s * (1 - snowLine));
+                this.ctx.lineTo(px + peakX, py - s);
+                this.ctx.lineTo(px + s * 0.3, py - s * (1 - snowLine * 0.5));
+                this.ctx.closePath();
+                this.ctx.fill();
+                
+                this.ctx.fillStyle = '#fff';
+                this.ctx.globalAlpha = 0.6;
+                this.ctx.beginPath();
+                this.ctx.moveTo(px + peakX - 5, py - s + 5);
+                this.ctx.lineTo(px + peakX, py - s);
+                this.ctx.lineTo(px + peakX + 5, py - s + 5);
+                this.ctx.closePath();
+                this.ctx.fill();
+                this.ctx.globalAlpha = 1;
+            }
+        }
+        
+        this.drawTerrainElementsDefault();
+        this.drawMapBorder();
+        this.drawStars();
+    }
+    
+    drawRiverTerrain() {
+        const bgColor = this.getTerrainBgColor(40, 80, 60);
+        this.ctx.fillStyle = bgColor;
+        this.ctx.fillRect(0, 0, this.mapWidth, this.mapHeight);
+        
+        if (!this.isNight) {
+            for (const g of this.grassPositions) {
+                this.ctx.fillStyle = `rgba(50, 110, 50, ${g.shade * 0.4})`;
+                this.ctx.fillRect(g.x, g.y, g.r, g.r);
+            }
+        }
+        
+        for (const dec of this.terrainDecorations) {
+            if (dec.type === 'river') {
+                const flow = Math.sin(this.terrainTime * 3 + dec.y) * 15;
+                for (let w = -5; w <= 5; w++) {
+                    const alpha = 0.15 - Math.abs(w) * 0.025;
+                    this.ctx.fillStyle = `rgba(30, 100, 180, ${alpha})`;
+                    this.ctx.fillRect(dec.x, dec.y + w * 4 + flow * 0.5, dec.width, dec.height / 10);
+                }
+                
+                this.ctx.fillStyle = `rgba(30, 120, 200, 0.15)`;
+                this.ctx.fillRect(dec.x, dec.y, dec.width, dec.height);
+                
+                if (!this.isNight) {
+                    for (let s = 0; s < 8; s++) {
+                        const sx = (s * 700 + this.terrainTime * 200) % (this.mapWidth + 200) - 100;
+                        const sy = dec.y + 10 + Math.sin(s * 1.5 + this.terrainTime * 2) * (dec.height / 2 - 10);
+                        this.ctx.fillStyle = `rgba(255,255,255,0.08)`;
+                        this.ctx.beginPath();
+                        this.ctx.arc(sx, sy, 4 + Math.sin(this.terrainTime + s) * 2, 0, Math.PI * 2);
+                        this.ctx.fill();
+                    }
+                }
+            }
+        }
+        
+        this.drawTerrainElementsDefault();
+        this.drawMapBorder();
+        this.drawStars();
+    }
+    
+    drawTerrainElementsGrassland() {
+        for (const element of this.terrainElements) {
+            this.ctx.save();
+            if (element.type === 'tree') {
+                this.ctx.fillStyle = this.isNight ? '#1a3a1a' : '#5d4037';
+                this.ctx.fillRect(element.x - 4, element.y - element.size * 0.3, 8, element.size * 0.8);
+                this.ctx.shadowColor = this.isNight ? '#0a1a0a' : '#2e7d32';
+                this.ctx.shadowBlur = this.isNight ? 5 : 15;
+                this.ctx.fillStyle = this.isNight ? '#0d2d0d' : '#2e7d32';
+                this.ctx.beginPath();
+                this.ctx.arc(element.x, element.y - element.size * 0.4, element.size * 0.8, 0, Math.PI * 2);
+                this.ctx.fill();
+                this.ctx.shadowBlur = 0;
+            } else if (element.type === 'rock') {
+                this.ctx.shadowColor = this.isNight ? '#444' : '#9e9e9e';
+                this.ctx.shadowBlur = this.isNight ? 3 : 10;
+                this.ctx.fillStyle = this.isNight ? '#444' : '#757575';
+                this.ctx.beginPath();
+                this.ctx.arc(element.x, element.y, element.size * 0.6, 0, Math.PI * 2);
+                this.ctx.fill();
+                this.ctx.shadowBlur = 0;
+            }
+            this.ctx.restore();
+        }
+    }
+    
+    drawTerrainElementsDesert() {
+        for (const element of this.terrainElements) {
+            this.ctx.save();
+            if (element.type === 'cactus') {
+                const cx = element.x, cy = element.y, s = element.size;
+                this.ctx.fillStyle = this.isNight ? '#1a3a1a' : '#2d5a27';
+                this.ctx.shadowColor = this.isNight ? '#0a1a0a' : '#1a3a15';
+                this.ctx.shadowBlur = this.isNight ? 3 : 10;
+                this.ctx.fillRect(cx - 3, cy - s * 0.6, 6, s * 0.8);
+                const armY = cy - s * 0.3;
+                this.ctx.fillRect(cx + 3, armY - 4, s * 0.3, 8);
+                this.ctx.fillRect(cx - 3 - s * 0.3, armY - 2, s * 0.3, 6);
+                this.ctx.fillRect(cx - 3, cy - s * 0.7, 8, 6);
+                this.ctx.shadowBlur = 0;
+            } else if (element.type === 'rock') {
+                this.ctx.fillStyle = this.isNight ? '#555' : '#b8860b';
+                this.ctx.shadowColor = this.isNight ? '#333' : '#8a6508';
+                this.ctx.shadowBlur = this.isNight ? 3 : 8;
+                this.ctx.beginPath();
+                this.ctx.arc(element.x, element.y, element.size * 0.5, 0, Math.PI * 2);
+                this.ctx.fill();
+                this.ctx.shadowBlur = 0;
+            }
+            this.ctx.restore();
+        }
+    }
+    
+    drawTerrainElementsDefault() {
+        for (const element of this.terrainElements) {
+            this.ctx.save();
+            if (element.type === 'tree') {
+                this.ctx.fillStyle = this.isNight ? '#1a3a1a' : '#5d4037';
+                this.ctx.fillRect(element.x - 4, element.y - element.size * 0.3, 8, element.size * 0.8);
+                this.ctx.shadowColor = this.isNight ? '#0a1a0a' : '#2e7d32';
+                this.ctx.shadowBlur = this.isNight ? 5 : 15;
+                this.ctx.fillStyle = this.isNight ? '#0d2d0d' : '#2e7d32';
+                this.ctx.beginPath();
+                this.ctx.arc(element.x, element.y - element.size * 0.4, element.size * 0.8, 0, Math.PI * 2);
+                this.ctx.fill();
+                this.ctx.shadowBlur = 0;
+            } else if (element.type === 'rock') {
+                this.ctx.shadowColor = this.isNight ? '#444' : '#9e9e9e';
+                this.ctx.shadowBlur = this.isNight ? 3 : 10;
+                this.ctx.fillStyle = this.isNight ? '#444' : '#757575';
+                this.ctx.beginPath();
+                this.ctx.arc(element.x, element.y, element.size * 0.6, 0, Math.PI * 2);
+                this.ctx.fill();
+                this.ctx.shadowBlur = 0;
+            }
+            this.ctx.restore();
+        }
+    }
+    
+    drawMapBorder() {
+        this.ctx.strokeStyle = this.isNight ? '#333' : '#4a4a4a';
+        this.ctx.lineWidth = 12;
+        this.ctx.strokeRect(0, 0, this.mapWidth, this.mapHeight);
+    }
+    
+    drawStars() {
         if (this.isNight) {
             this.ctx.fillStyle = '#fff';
             for (let i = 0; i < 50; i++) {
@@ -2465,44 +3172,6 @@ class Game {
                     (i * 271 + 107) % this.mapHeight,
                     2, 2
                 );
-            }
-        }
-        
-        // 绘制地图边界 - 石墙风格
-        this.ctx.strokeStyle = '#4a4a4a';
-        this.ctx.lineWidth = 12;
-        this.ctx.strokeRect(0, 0, this.mapWidth, this.mapHeight);
-        
-        // 绘制地形元素 - 树木和石头
-        for (const element of this.terrainElements) {
-            if (element.type === 'tree') {
-                // 树干
-                this.ctx.fillStyle = '#5d4037';
-                this.ctx.fillRect(element.x - 4, element.y - element.size * 0.3, 8, element.size * 0.8);
-                // 树冠发光效果
-                this.ctx.shadowColor = '#2e7d32';
-                this.ctx.shadowBlur = 15;
-                this.ctx.fillStyle = '#2e7d32';
-                this.ctx.beginPath();
-                this.ctx.arc(element.x, element.y - element.size * 0.4, element.size * 0.8, 0, Math.PI * 2);
-                this.ctx.fill();
-                this.ctx.shadowBlur = 0;
-            } else if (element.type === 'rock') {
-                // 石头发光效果
-                this.ctx.shadowColor = '#9e9e9e';
-                this.ctx.shadowBlur = 10;
-                this.ctx.fillStyle = '#757575';
-                this.ctx.beginPath();
-                this.ctx.arc(element.x, element.y, element.size * 0.6, 0, Math.PI * 2);
-                this.ctx.fill();
-                this.ctx.shadowBlur = 0;
-            } else if (element.type === 'obstacle') {
-                // 障碍物发光效果
-                this.ctx.shadowColor = '#c0392b';
-                this.ctx.shadowBlur = 20;
-                this.ctx.fillStyle = '#c0392b';
-                this.ctx.fillRect(element.x - element.size/2, element.y - element.size/2, element.size, element.size);
-                this.ctx.shadowBlur = 0;
             }
         }
     }
@@ -2799,6 +3468,66 @@ class Game {
             this.ctx.fillStyle = barColor;
             this.ctx.fillRect(barX, barY, barWidth * healthPct, barHeight);
 
+            this.ctx.restore();
+        }
+    }
+    
+    drawObstacles() {
+        for (const obs of this.obstacles) {
+            this.ctx.save();
+            this.ctx.translate(obs.x, obs.y);
+            this.ctx.rotate(obs.angle);
+            
+            const healthPct = Math.max(0, obs.health / obs.maxHealth);
+            const alpha = 0.4 + healthPct * 0.4;
+            
+            this.ctx.fillStyle = obs.color;
+            this.ctx.globalAlpha = alpha;
+            
+            this.ctx.shadowColor = obs.color;
+            this.ctx.shadowBlur = healthPct > 0.5 ? 15 : 5;
+            
+            if (obs.shape === 'circle') {
+                this.ctx.beginPath();
+                this.ctx.arc(0, 0, obs.radius, 0, Math.PI * 2);
+                this.ctx.fill();
+                this.ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+                this.ctx.lineWidth = 2;
+                this.ctx.stroke();
+            } else {
+                const s = obs.radius * 0.8;
+                this.ctx.fillRect(-s, -s, s * 2, s * 2);
+                this.ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+                this.ctx.lineWidth = 2;
+                this.ctx.strokeRect(-s, -s, s * 2, s * 2);
+            }
+            
+            this.ctx.shadowBlur = 0;
+            this.ctx.globalAlpha = 1;
+            
+            this.ctx.restore();
+        }
+    }
+    
+    drawEnemyBullets() {
+        for (const b of this.enemyBullets) {
+            this.ctx.save();
+            this.ctx.translate(b.x, b.y);
+            this.ctx.rotate(b.angle || 0);
+            
+            this.ctx.fillStyle = '#ff6b6b';
+            this.ctx.shadowColor = '#ff4444';
+            this.ctx.shadowBlur = 12;
+            this.ctx.beginPath();
+            this.ctx.arc(0, 0, b.radius, 0, Math.PI * 2);
+            this.ctx.fill();
+            
+            this.ctx.shadowBlur = 0;
+            this.ctx.fillStyle = 'rgba(255,200,200,0.6)';
+            this.ctx.beginPath();
+            this.ctx.arc(0, 0, b.radius * 0.5, 0, Math.PI * 2);
+            this.ctx.fill();
+            
             this.ctx.restore();
         }
     }
