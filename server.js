@@ -73,6 +73,7 @@ const rooms = new Map();
 const gameStates = new Map();
 const registeredNames = new Set();
 const friendMap = new Map();
+const pendingFriendRequests = new Map();
 const playerOnlineMap = new Map();
 
 const VEHICLE_TYPES = [
@@ -158,7 +159,7 @@ function gameTick(roomId) {
     
     // 1. Spawn enemies
     gs.enemySpawnCounter++;
-    if (gs.enemySpawnCounter >= 50 && gs.enemies.length < 8) {
+    if (gs.enemySpawnCounter >= 24 && gs.enemies.length < 12) {
         gs.enemySpawnCounter = 0;
         spawnEnemy(roomId);
     }
@@ -400,35 +401,189 @@ function spawnEnemy(roomId) {
 function spawnObstacles(gs) {
     if (!gs) return;
     const terrain = gs.terrainType || 'grassland';
-    let obsColors, count;
+    let obsColors;
     
     if (terrain === 'desert') {
         obsColors = ['#8B7355', '#A0522D', '#CD853F', '#D2B48C', '#B8860B'];
-        count = 15 + Math.floor(Math.random() * 8);
     } else if (terrain === 'mountains') {
         obsColors = ['#555', '#666', '#777', '#5a5a5a', '#4a4a4a'];
-        count = 22 + Math.floor(Math.random() * 10);
     } else if (terrain === 'rivers') {
         obsColors = ['#5F9EA0', '#6B8E23', '#556B2F', '#8FBC8F', '#7B8D6B'];
-        count = 18 + Math.floor(Math.random() * 8);
+    } else if (terrain === 'volcano') {
+        obsColors = ['#444', '#555', '#4a3a3a', '#3a3a3a', '#5a4a3a'];
+    } else if (terrain === 'snow') {
+        obsColors = ['#ccc', '#bbb', '#aaa', '#ddd', '#999'];
     } else {
         obsColors = ['#8B7355', '#A0522D', '#6B4226', '#556B2F', '#5F9EA0', '#B8860B'];
-        count = 20 + Math.floor(Math.random() * 10);
     }
     
-    for (let i = 0; i < count; i++) {
+    const getColor = () => obsColors[Math.floor(Math.random() * obsColors.length)];
+    const getShape = () => Math.random() > 0.5 ? 'circle' : 'rect';
+    const getRadius = () => 20 + Math.random() * 35;
+    const addObstacle = (x, y) => {
+        const radius = getRadius();
         gs.obstacles.push({
             id: 'obs_' + (gs.obsIdCounter++),
-            x: 100 + Math.random() * (MAP_WIDTH - 200),
-            y: 100 + Math.random() * (MAP_HEIGHT - 200),
-            radius: 20 + Math.random() * 35,
+            x, y, radius,
             health: 100 + Math.random() * 150,
             maxHealth: 0,
-            color: obsColors[Math.floor(Math.random() * obsColors.length)],
+            color: getColor(),
             angle: Math.random() * Math.PI * 2,
-            shape: Math.random() > 0.5 ? 'circle' : 'rect'
+            shape: getShape()
         });
-        gs.obstacles[i].maxHealth = gs.obstacles[i].health;
+        gs.obstacles[gs.obstacles.length - 1].maxHealth = gs.obstacles[gs.obstacles.length - 1].health;
+    };
+    
+    const safeDist = (x, y, minDist = 200) => {
+        for (const obs of gs.obstacles) {
+            if (Math.hypot(x - obs.x, y - obs.y) < obs.radius + 60) return false;
+        }
+        return true;
+    };
+    
+    if (terrain === 'desert') {
+        const rings = 3;
+        for (let r = 0; r < rings; r++) {
+            const cx = MAP_WIDTH / 2 + (Math.random() - 0.5) * MAP_WIDTH * 0.3;
+            const cy = MAP_HEIGHT / 2 + (Math.random() - 0.5) * MAP_HEIGHT * 0.3;
+            const ringRadius = 100 + r * 80 + Math.random() * 30;
+            const count = 6 + r * 2 + Math.floor(Math.random() * 3);
+            for (let a = 0; a < count; a++) {
+                const angle = (a / count) * Math.PI * 2 + Math.random() * 0.3;
+                const x = cx + Math.cos(angle) * ringRadius;
+                const y = cy + Math.sin(angle) * ringRadius;
+                if (x > 60 && x < MAP_WIDTH - 60 && y > 60 && y < MAP_HEIGHT - 60 && safeDist(x, y)) {
+                    addObstacle(x, y);
+                }
+            }
+        }
+        for (let i = 0; i < 6; i++) {
+            let x, y, attempts = 0;
+            do {
+                x = 100 + Math.random() * (MAP_WIDTH - 200);
+                y = 100 + Math.random() * (MAP_HEIGHT - 200);
+                attempts++;
+            } while (attempts < 30 && !safeDist(x, y));
+            if (safeDist(x, y)) addObstacle(x, y);
+        }
+    } else if (terrain === 'mountains') {
+        const walls = 4 + Math.floor(Math.random() * 2);
+        for (let w = 0; w < walls; w++) {
+            const horizontal = Math.random() > 0.5;
+            const baseX = 200 + Math.random() * (MAP_WIDTH - 400);
+            const baseY = 200 + Math.random() * (MAP_HEIGHT - 400);
+            const length = 300 + Math.random() * 400;
+            const count = 5 + Math.floor(Math.random() * 4);
+            for (let i = 0; i < count; i++) {
+                const t = i / count;
+                const x = horizontal ? baseX + t * length : baseX + (Math.random() - 0.5) * 80;
+                const y = horizontal ? baseY + (Math.random() - 0.5) * 80 : baseY + t * length;
+                if (x > 60 && x < MAP_WIDTH - 60 && y > 60 && y < MAP_HEIGHT - 60 && safeDist(x, y)) {
+                    addObstacle(x, y);
+                }
+            }
+        }
+        for (let i = 0; i < 8; i++) {
+            let x, y, attempts = 0;
+            do {
+                x = 100 + Math.random() * (MAP_WIDTH - 200);
+                y = 100 + Math.random() * (MAP_HEIGHT - 200);
+                attempts++;
+            } while (attempts < 30 && !safeDist(x, y));
+            if (safeDist(x, y)) addObstacle(x, y);
+        }
+    } else if (terrain === 'rivers') {
+        const riverRegions = [
+            { y: MAP_HEIGHT * 0.3, height: 80 },
+            { y: MAP_HEIGHT * 0.6, height: 80 }
+        ];
+        for (const region of riverRegions) {
+            const bankY1 = region.y - region.height * 0.4;
+            const bankY2 = region.y + region.height * 0.4;
+            const count = 6 + Math.floor(Math.random() * 4);
+            for (let i = 0; i < count; i++) {
+                const x = 100 + Math.random() * (MAP_WIDTH - 200);
+                for (const bankY of [bankY1, bankY2]) {
+                    const y = bankY + (Math.random() - 0.5) * 40;
+                    if (x > 60 && x < MAP_WIDTH - 60 && y > 60 && y < MAP_HEIGHT - 60 && safeDist(x, y)) {
+                        addObstacle(x, y);
+                    }
+                }
+            }
+        }
+        for (let i = 0; i < 8; i++) {
+            let x, y, attempts = 0;
+            do {
+                x = 100 + Math.random() * (MAP_WIDTH - 200);
+                y = 100 + Math.random() * (MAP_HEIGHT - 200);
+                attempts++;
+            } while (attempts < 30 && !safeDist(x, y));
+            if (safeDist(x, y)) addObstacle(x, y);
+        }
+    } else if (terrain === 'volcano') {
+        const centerX = MAP_WIDTH / 2;
+        const centerY = MAP_HEIGHT / 2;
+        for (let r = 1; r <= 3; r++) {
+            const ringRadius = r * 120 + Math.random() * 40;
+            const count = 6 + r * 2;
+            for (let a = 0; a < count; a++) {
+                const angle = (a / count) * Math.PI * 2 + Math.random() * 0.2;
+                const x = centerX + Math.cos(angle) * ringRadius;
+                const y = centerY + Math.sin(angle) * ringRadius;
+                if (x > 60 && x < MAP_WIDTH - 60 && y > 60 && y < MAP_HEIGHT - 60 && safeDist(x, y)) {
+                    addObstacle(x, y);
+                }
+            }
+        }
+        for (let i = 0; i < 10; i++) {
+            let x, y, attempts = 0;
+            do {
+                x = 100 + Math.random() * (MAP_WIDTH - 200);
+                y = 100 + Math.random() * (MAP_HEIGHT - 200);
+                attempts++;
+            } while (attempts < 30 && !safeDist(x, y));
+            if (safeDist(x, y)) addObstacle(x, y);
+        }
+    } else if (terrain === 'snow') {
+        const gridSize = 450;
+        const cols = Math.floor(MAP_WIDTH / gridSize);
+        const rows = Math.floor(MAP_HEIGHT / gridSize);
+        for (let r = 0; r < rows; r++) {
+            for (let c = 0; c < cols; c++) {
+                if (Math.random() < 0.3) {
+                    const x = c * gridSize + 80 + Math.random() * (gridSize - 160);
+                    const y = r * gridSize + 80 + Math.random() * (gridSize - 160);
+                    if (safeDist(x, y)) addObstacle(x, y);
+                }
+            }
+        }
+        for (let i = 0; i < 10; i++) {
+            const x = 100 + Math.random() * (MAP_WIDTH - 200);
+            const y = 100 + Math.random() * (MAP_HEIGHT - 200);
+            if (safeDist(x, y)) addObstacle(x, y);
+        }
+    } else {
+        const gridSize = 500;
+        const cols = Math.floor(MAP_WIDTH / gridSize);
+        const rows = Math.floor(MAP_HEIGHT / gridSize);
+        for (let r = 0; r < rows; r++) {
+            for (let c = 0; c < cols; c++) {
+                if (Math.random() < 0.35) {
+                    const x = c * gridSize + 80 + Math.random() * (gridSize - 160);
+                    const y = r * gridSize + 80 + Math.random() * (gridSize - 160);
+                    if (safeDist(x, y)) addObstacle(x, y);
+                }
+            }
+        }
+        for (let i = 0; i < 8; i++) {
+            let x, y, attempts = 0;
+            do {
+                x = 100 + Math.random() * (MAP_WIDTH - 200);
+                y = 100 + Math.random() * (MAP_HEIGHT - 200);
+                attempts++;
+            } while (attempts < 30 && !safeDist(x, y));
+            if (safeDist(x, y)) addObstacle(x, y);
+        }
     }
 }
 
@@ -533,17 +688,17 @@ function updateEnemiesAI(roomId) {
             }
             
             if (dist < 800) {
-                if (enemy.shootTimer === undefined) enemy.shootTimer = 40 + Math.random() * 60;
+                if (enemy.shootTimer === undefined) enemy.shootTimer = 30 + Math.random() * 30;
                 enemy.shootTimer--;
                 if (enemy.shootTimer <= 0) {
-                    enemy.shootTimer = 40 + Math.random() * 60;
-                    const bulletSpeed = 7 + Math.random() * 4;
+                    enemy.shootTimer = 30 + Math.random() * 30;
+                    const bulletSpeed = 18 + Math.random() * 8;
                     gs.enemyBullets.push({
                         x: enemy.x,
                         y: enemy.y,
                         vx: (nearestPlayer.x - enemy.x) / dist * bulletSpeed,
                         vy: (nearestPlayer.y - enemy.y) / dist * bulletSpeed,
-                        radius: 4,
+                        radius: 3,
                         damage: 5 + Math.floor(Math.random() * 6),
                         angle: enemy.angle,
                         life: 200,
@@ -945,6 +1100,9 @@ function handleMessage(ws, message) {
         case 'addFriend':
             handleAddFriend(ws, message);
             break;
+        case 'friendRequestResponse':
+            handleFriendRequestResponse(ws, message);
+            break;
         case 'removeFriend':
             handleRemoveFriend(ws, message);
             break;
@@ -1070,6 +1228,16 @@ function handleShoot(ws, message) {
     
     if (result.hit && result.enemy) {
         console.log(`[handleShoot] Immediate HIT enemy id=${result.enemy.id} hp=${Math.round(result.enemy.health)}`);
+        broadcastToRoom(ws.roomId, {
+            type: 'hitEnemy',
+            userId: ws.userId,
+            enemyId: result.enemy.id,
+            x: result.enemy.x,
+            y: result.enemy.y,
+            damage: message.damage || 15,
+            enemyHealth: Math.round(result.enemy.health),
+            enemyMaxHealth: result.enemy.maxHealth
+        });
         if (result.enemy.health <= 0) {
             const room = rooms.get(ws.roomId);
             if (room) {
@@ -1468,13 +1636,11 @@ function handleAddFriend(ws, message) {
     }
     
     if (!targetUserId) {
-        console.log(`[handleAddFriend] FAIL - target not found: ${targetName}`);
         ws.send(JSON.stringify({ type: 'addFriendError', message: '玩家不存在或不在线' }));
         return;
     }
     
     if (targetUserId === ws.userId) {
-        console.log(`[handleAddFriend] FAIL - cannot add self`);
         ws.send(JSON.stringify({ type: 'addFriendError', message: '不能添加自己为好友' }));
         return;
     }
@@ -1483,22 +1649,82 @@ function handleAddFriend(ws, message) {
         friendMap.set(ws.userId, new Set());
     }
     if (friendMap.get(ws.userId).has(targetUserId)) {
-        console.log(`[handleAddFriend] FAIL - already friends: ${targetName}`);
         ws.send(JSON.stringify({ type: 'addFriendError', message: '已经是好友' }));
         return;
     }
     
-    friendMap.get(ws.userId).add(targetUserId);
-    console.log(`[handleAddFriend] SUCCESS - added ${targetName} (${targetUserId})`);
-    
-    const friendList = [];
-    for (const fid of friendMap.get(ws.userId)) {
-        const online = playerOnlineMap.get(fid);
-        const friendName = online ? online.name : getFriendName(fid);
-        friendList.push({ userId: fid, name: friendName, online: !!online, roomId: online ? online.roomId : null });
+    if (!pendingFriendRequests.has(targetUserId)) {
+        pendingFriendRequests.set(targetUserId, new Map());
     }
-    console.log(`[handleAddFriend] Sending friendList to ${ws.userId}, count=${friendList.length}`);
-    ws.send(JSON.stringify({ type: 'friendList', friends: friendList }));
+    const existing = pendingFriendRequests.get(targetUserId).get(ws.userId);
+    if (existing) {
+        ws.send(JSON.stringify({ type: 'addFriendError', message: '已发送过好友申请，等待对方确认' }));
+        return;
+    }
+    
+    pendingFriendRequests.get(targetUserId).set(ws.userId, {
+        fromUserId: ws.userId,
+        fromName: ws.playerName || '未知',
+        timestamp: Date.now()
+    });
+    
+    console.log(`[handleAddFriend] Friend request sent: ${ws.playerName} -> ${targetName}`);
+    ws.send(JSON.stringify({ type: 'addFriendResult', success: true, message: '好友申请已发送' }));
+    
+    const targetOnline = playerOnlineMap.get(targetUserId);
+    if (targetOnline && targetOnline.ws) {
+        try {
+            targetOnline.ws.send(JSON.stringify({
+                type: 'friendRequest',
+                fromUserId: ws.userId,
+                fromName: ws.playerName || '未知'
+            }));
+        } catch(e) {
+            console.log(`[handleAddFriend] Error sending request to target:`, e.message);
+        }
+    }
+}
+
+function handleFriendRequestResponse(ws, message) {
+    console.log(`[handleFriendRequestResponse] userId=${ws.userId} fromUserId=${message.fromUserId} accept=${message.accept}`);
+    if (!ws.userId) return;
+    
+    const fromUserId = message.fromUserId;
+    const pending = pendingFriendRequests.get(ws.userId);
+    if (!pending || !pending.has(fromUserId)) {
+        ws.send(JSON.stringify({ type: 'addFriendError', message: '好友申请已过期' }));
+        return;
+    }
+    
+    const request = pending.get(fromUserId);
+    pending.delete(fromUserId);
+    
+    if (message.accept) {
+        if (!friendMap.has(ws.userId)) friendMap.set(ws.userId, new Set());
+        if (!friendMap.has(fromUserId)) friendMap.set(fromUserId, new Set());
+        
+        friendMap.get(ws.userId).add(fromUserId);
+        friendMap.get(fromUserId).add(ws.userId);
+        
+        console.log(`[handleFriendRequestResponse] Friend added: ${ws.userId} <-> ${fromUserId}`);
+        
+        for (const uid of [ws.userId, fromUserId]) {
+            const online = playerOnlineMap.get(uid);
+            if (online && online.ws) {
+                const friendList = [];
+                for (const fid of friendMap.get(uid)) {
+                    const fOnline = playerOnlineMap.get(fid);
+                    const fName = fOnline ? fOnline.name : getFriendName(fid);
+                    friendList.push({ userId: fid, name: fName, online: !!fOnline, roomId: fOnline ? fOnline.roomId : null });
+                }
+                online.ws.send(JSON.stringify({ type: 'friendList', friends: friendList }));
+            }
+        }
+        
+        ws.send(JSON.stringify({ type: 'addFriendResult', success: true, message: '好友添加成功' }));
+    } else {
+        ws.send(JSON.stringify({ type: 'addFriendResult', success: false, message: '已拒绝好友申请' }));
+    }
 }
 
 function handleRemoveFriend(ws, message) {

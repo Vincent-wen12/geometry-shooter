@@ -155,6 +155,12 @@ class Network {
             case 'friendList':
                 this.handleFriendList(data);
                 break;
+            case 'friendRequest':
+                this.handleFriendRequest(data);
+                break;
+            case 'addFriendResult':
+                this.handleAddFriendResult(data);
+                break;
             case 'friendOnline':
                 this.handleFriendOnline(data);
                 break;
@@ -166,6 +172,9 @@ class Network {
                 break;
             case 'nameTaken':
                 this.handleNameTaken(data);
+                break;
+            case 'hitEnemy':
+                this.handleHitEnemy(data);
                 break;
         }
     }
@@ -644,6 +653,20 @@ class Network {
         window.game.addChatMessage('系统', data.message, false);
     }
     
+    handleFriendRequest(data) {
+        console.log(`[Network] handleFriendRequest: from=${data.fromName}`);
+        if (window.game) {
+            window.game.addFriendRequest(data.fromUserId, data.fromName);
+        }
+    }
+    
+    handleAddFriendResult(data) {
+        console.log(`[Network] handleAddFriendResult: success=${data.success} msg=${data.message}`);
+        if (window.game) {
+            window.game.addChatMessage('系统', data.message, false);
+        }
+    }
+    
     handleNameTaken(data) {
         console.log(`[Network] handleNameTaken: original=${data.originalName} assigned=${data.assignedName}`);
         if (window.game && window.game.player) {
@@ -651,6 +674,22 @@ class Network {
             window.game.addChatMessage('系统', `名称已存在，已自动更名为: ${data.assignedName}`, false);
         }
     }
-}
+    
+    handleHitEnemy(data) {
+        if (!window.game) return;
+        if (data.userId !== window.game.player?.id) return;
+        
+        window.game.spawnHitEffect(data.x, data.y, '#ff4444');
+        if (window.game.enemies) {
+            const enemy = window.game.enemies.find(e => e.id === data.enemyId);
+            if (enemy) {
+                enemy.health = data.enemyHealth;
+                enemy.maxHealth = data.enemyMaxHealth;
+                enemy.hitFlash = 200;
+            }
+        }
+    }
+    
+    }
 
 window.network = new Network();

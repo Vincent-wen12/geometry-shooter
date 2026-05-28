@@ -614,6 +614,7 @@ class Game {
         this.terrainDecorations = [];
         this.grassPositions = [];
         this.regions = [];
+        this.ambientParticles = [];
 
         // 动画状态
         this.walkTime = 0;
@@ -738,6 +739,10 @@ class Game {
                      type = Math.random() > 0.6 ? 'peak' : (Math.random() > 0.5 ? 'rocky' : 'slope');
                  } else if (terrain === 'rivers') {
                      type = Math.random() > 0.8 ? 'water' : (Math.random() > 0.4 ? 'shore' : 'land');
+                 } else if (terrain === 'volcano') {
+                     type = Math.random() > 0.6 ? 'lava' : (Math.random() > 0.5 ? 'ash' : 'rock');
+                 } else if (terrain === 'snow') {
+                     type = Math.random() > 0.6 ? 'ice' : (Math.random() > 0.5 ? 'snow' : 'forest');
                  } else {
                      type = Math.random() > 0.7 ? 'forest' : (Math.random() > 0.5 ? 'rocks' : 'open');
                  }
@@ -830,6 +835,56 @@ class Game {
                     y: Math.random() * this.mapHeight,
                     r: 1 + Math.random() * 3,
                     shade: 0.4 + Math.random() * 0.3
+                });
+            }
+        } else if (terrain === 'volcano') {
+            for (let i = 0; i < 25; i++) {
+                this.terrainElements.push({
+                    x: Math.random() * this.mapWidth,
+                    y: Math.random() * this.mapHeight,
+                    size: 30 + Math.random() * 60,
+                    type: 'volcanic_rock'
+                });
+            }
+            for (let i = 0; i < 8; i++) {
+                this.terrainDecorations.push({
+                    x: 300 + Math.random() * (this.mapWidth - 600),
+                    y: 300 + Math.random() * (this.mapHeight - 600),
+                    radius: 30 + Math.random() * 50,
+                    type: 'lava_pool'
+                });
+            }
+            for (let i = 0; i < 120; i++) {
+                this.grassPositions.push({
+                    x: Math.random() * this.mapWidth,
+                    y: Math.random() * this.mapHeight,
+                    r: 2 + Math.random() * 5,
+                    shade: 0.2 + Math.random() * 0.3
+                });
+            }
+        } else if (terrain === 'snow') {
+            for (let i = 0; i < 40; i++) {
+                this.terrainElements.push({
+                    x: Math.random() * this.mapWidth,
+                    y: Math.random() * this.mapHeight,
+                    size: 25 + Math.random() * 50,
+                    type: 'pine'
+                });
+            }
+            for (let i = 0; i < 60; i++) {
+                this.terrainElements.push({
+                    x: Math.random() * this.mapWidth,
+                    y: Math.random() * this.mapHeight,
+                    size: 10 + Math.random() * 25,
+                    type: 'snow_pile'
+                });
+            }
+            for (let i = 0; i < 200; i++) {
+                this.grassPositions.push({
+                    x: Math.random() * this.mapWidth,
+                    y: Math.random() * this.mapHeight,
+                    r: 1 + Math.random() * 2,
+                    shade: 0.7 + Math.random() * 0.3
                 });
             }
         } else {
@@ -1317,6 +1372,33 @@ class Game {
         console.log(`[FriendPanel] Sent joinFriendRoom message to server`);
     }
     
+    addFriendRequest(fromUserId, fromName) {
+        this.addChatMessage('系统', `${fromName} 请求添加你为好友`, false);
+        this.pendingFriendRequests = this.pendingFriendRequests || [];
+        this.pendingFriendRequests.push({ userId: fromUserId, name: fromName });
+        
+        const list = document.getElementById('friend-list');
+        if (!list) return;
+        
+        const reqDiv = document.createElement('div');
+        reqDiv.className = 'friend-request';
+        reqDiv.innerHTML = `
+            <span>📩 ${fromName} 请求加好友</span>
+            <button class="req-accept" data-uid="${fromUserId}">✓ 接受</button>
+            <button class="req-reject" data-uid="${fromUserId}">✗ 拒绝</button>
+        `;
+        list.prepend(reqDiv);
+        
+        reqDiv.querySelector('.req-accept').addEventListener('click', () => {
+            window.network.send({ type: 'friendRequestResponse', fromUserId, accept: true });
+            reqDiv.remove();
+        });
+        reqDiv.querySelector('.req-reject').addEventListener('click', () => {
+            window.network.send({ type: 'friendRequestResponse', fromUserId, accept: false });
+            reqDiv.remove();
+        });
+    }
+    
     sendChat(message) {
         if (!this.player) return;
         
@@ -1503,55 +1585,147 @@ class Game {
                 const enemy = this.enemies[this.enemies.length - 1];
                 enemy.maxHealth = enemy.health;
             }
-        }, 2500);
+        }, 1200);
     }
-    
+
     spawnObstacles() {
         const terrain = this.terrainType || 'grassland';
         let obsColors;
-        let count;
         
         if (terrain === 'desert') {
             obsColors = ['#8B7355', '#A0522D', '#CD853F', '#D2B48C', '#B8860B'];
-            count = 15 + Math.floor(Math.random() * 8);
         } else if (terrain === 'mountains') {
             obsColors = ['#555', '#666', '#777', '#5a5a5a', '#4a4a4a'];
-            count = 22 + Math.floor(Math.random() * 10);
         } else if (terrain === 'rivers') {
             obsColors = ['#5F9EA0', '#6B8E23', '#556B2F', '#8FBC8F', '#7B8D6B'];
-            count = 18 + Math.floor(Math.random() * 8);
         } else {
             obsColors = ['#8B7355', '#A0522D', '#6B4226', '#556B2F', '#5F9EA0', '#B8860B'];
-            count = 20 + Math.floor(Math.random() * 10);
         }
         
-        for (let i = 0; i < count; i++) {
-            const radius = 20 + Math.random() * 35;
-            let x, y;
-            let attempts = 0;
-            do {
-                x = 100 + Math.random() * (this.mapWidth - 200);
-                y = 100 + Math.random() * (this.mapHeight - 200);
-                attempts++;
-            } while (attempts < 20 && Math.hypot(x - this.player.x, y - this.player.y) < 300);
-            
-            if (terrain === 'rivers') {
-                const nearRiver = this.terrainDecorations.some(d => 
-                    d.type === 'river' && Math.abs(y - d.y) < d.height * 0.7
-                );
-                if (nearRiver) continue;
-            }
-            
+        const getColor = () => obsColors[Math.floor(Math.random() * obsColors.length)];
+        const getShape = () => Math.random() > 0.5 ? 'circle' : 'rect';
+        const getRadius = () => 20 + Math.random() * 35;
+        const addObstacle = (x, y) => {
+            const radius = getRadius();
             this.obstacles.push({
-                id: 'obs_' + i,
+                id: 'obs_' + this.obstacles.length,
                 x, y, radius,
                 health: 100 + Math.random() * 150,
                 maxHealth: 0,
-                color: obsColors[Math.floor(Math.random() * obsColors.length)],
+                color: getColor(),
                 angle: Math.random() * Math.PI * 2,
-                shape: Math.random() > 0.5 ? 'circle' : 'rect'
+                shape: getShape()
             });
-            this.obstacles[i].maxHealth = this.obstacles[i].health;
+            this.obstacles[this.obstacles.length - 1].maxHealth = this.obstacles[this.obstacles.length - 1].health;
+        };
+        
+        const safeDist = (x, y, minDist = 300) => {
+            if (Math.hypot(x - this.player.x, y - this.player.y) < minDist) return false;
+            for (const obs of this.obstacles) {
+                if (Math.hypot(x - obs.x, y - obs.y) < obs.radius + 60) return false;
+            }
+            return true;
+        };
+        
+        if (terrain === 'desert') {
+            const rings = 3;
+            for (let r = 0; r < rings; r++) {
+                const cx = this.mapWidth / 2 + (Math.random() - 0.5) * this.mapWidth * 0.3;
+                const cy = this.mapHeight / 2 + (Math.random() - 0.5) * this.mapHeight * 0.3;
+                const ringRadius = 100 + r * 80 + Math.random() * 30;
+                const count = 6 + r * 2 + Math.floor(Math.random() * 3);
+                for (let a = 0; a < count; a++) {
+                    const angle = (a / count) * Math.PI * 2 + Math.random() * 0.3;
+                    const x = cx + Math.cos(angle) * ringRadius;
+                    const y = cy + Math.sin(angle) * ringRadius;
+                    if (x > 60 && x < this.mapWidth - 60 && y > 60 && y < this.mapHeight - 60 && safeDist(x, y, 200)) {
+                        addObstacle(x, y);
+                    }
+                }
+            }
+            for (let i = 0; i < 6; i++) {
+                let x, y, attempts = 0;
+                do {
+                    x = 100 + Math.random() * (this.mapWidth - 200);
+                    y = 100 + Math.random() * (this.mapHeight - 200);
+                    attempts++;
+                } while (attempts < 30 && !safeDist(x, y, 200));
+                if (safeDist(x, y, 150)) addObstacle(x, y);
+            }
+        } else if (terrain === 'mountains') {
+            const walls = 4 + Math.floor(Math.random() * 2);
+            for (let w = 0; w < walls; w++) {
+                const horizontal = Math.random() > 0.5;
+                const baseX = 200 + Math.random() * (this.mapWidth - 400);
+                const baseY = 200 + Math.random() * (this.mapHeight - 400);
+                const length = 300 + Math.random() * 400;
+                const count = 5 + Math.floor(Math.random() * 4);
+                for (let i = 0; i < count; i++) {
+                    const t = i / count;
+                    const x = horizontal ? baseX + t * length : baseX + (Math.random() - 0.5) * 80;
+                    const y = horizontal ? baseY + (Math.random() - 0.5) * 80 : baseY + t * length;
+                    if (x > 60 && x < this.mapWidth - 60 && y > 60 && y < this.mapHeight - 60 && safeDist(x, y, 200)) {
+                        addObstacle(x, y);
+                    }
+                }
+            }
+            for (let i = 0; i < 8; i++) {
+                let x, y, attempts = 0;
+                do {
+                    x = 100 + Math.random() * (this.mapWidth - 200);
+                    y = 100 + Math.random() * (this.mapHeight - 200);
+                    attempts++;
+                } while (attempts < 30 && !safeDist(x, y, 200));
+                if (safeDist(x, y, 150)) addObstacle(x, y);
+            }
+        } else if (terrain === 'rivers') {
+            for (const dec of this.terrainDecorations) {
+                if (dec.type === 'river') {
+                    const bankY1 = dec.y - dec.height * 0.4;
+                    const bankY2 = dec.y + dec.height * 0.4;
+                    const count = 6 + Math.floor(Math.random() * 4);
+                    for (let i = 0; i < count; i++) {
+                        const x = 100 + Math.random() * (this.mapWidth - 200);
+                        for (const bankY of [bankY1, bankY2]) {
+                            const y = bankY + (Math.random() - 0.5) * 40;
+                            if (x > 60 && x < this.mapWidth - 60 && y > 60 && y < this.mapHeight - 60 && safeDist(x, y, 200)) {
+                                addObstacle(x, y);
+                            }
+                        }
+                    }
+                }
+            }
+            for (let i = 0; i < 8; i++) {
+                let x, y, attempts = 0;
+                do {
+                    x = 100 + Math.random() * (this.mapWidth - 200);
+                    y = 100 + Math.random() * (this.mapHeight - 200);
+                    attempts++;
+                } while (attempts < 30 && !safeDist(x, y, 200));
+                if (safeDist(x, y, 150)) addObstacle(x, y);
+            }
+        } else {
+            const gridSize = 500;
+            const cols = Math.floor(this.mapWidth / gridSize);
+            const rows = Math.floor(this.mapHeight / gridSize);
+            for (let r = 0; r < rows; r++) {
+                for (let c = 0; c < cols; c++) {
+                    if (Math.random() < 0.35) {
+                        const x = c * gridSize + 80 + Math.random() * (gridSize - 160);
+                        const y = r * gridSize + 80 + Math.random() * (gridSize - 160);
+                        if (safeDist(x, y, 200)) addObstacle(x, y);
+                    }
+                }
+            }
+            for (let i = 0; i < 8; i++) {
+                let x, y, attempts = 0;
+                do {
+                    x = 100 + Math.random() * (this.mapWidth - 200);
+                    y = 100 + Math.random() * (this.mapHeight - 200);
+                    attempts++;
+                } while (attempts < 30 && !safeDist(x, y, 200));
+                if (safeDist(x, y, 150)) addObstacle(x, y);
+            }
         }
     }
     
@@ -1598,6 +1772,7 @@ class Game {
         this.updateObstacles();
         this.updateEnemyBullets();
         this.updateParticles();
+        this.updateAmbientParticles();
         this.updateLoots();
         this.updatePowerups();
         this.updateVehicles();
@@ -2266,11 +2441,14 @@ class Game {
                 angle += (Math.random() - 0.5) * weapon.spread;
             }
 
+            const vx = Math.cos(angle) * weapon.bulletSpeed;
+            const vy = Math.sin(angle) * weapon.bulletSpeed;
+
             const bullet = {
                 x: this.player.x + Math.cos(angle) * this.player.radius,
                 y: this.player.y + Math.sin(angle) * this.player.radius,
-                vx: Math.cos(angle) * weapon.bulletSpeed,
-                vy: Math.sin(angle) * weapon.bulletSpeed,
+                vx: vx,
+                vy: vy,
                 radius: weapon.bulletRadius || 5,
                 color: this.player.color,
                 owner: this.player.id,
@@ -2280,6 +2458,19 @@ class Game {
             };
 
             this.bullets.push(bullet);
+
+            if (this.isMultiplayer && window.network && window.network.connected) {
+                window.network.send({
+                    type: 'shoot',
+                    x: bullet.x,
+                    y: bullet.y,
+                    vx: vx,
+                    vy: vy,
+                    damage: weapon.damage,
+                    bulletRadius: weapon.bulletRadius || 5,
+                    color: this.player.color
+                });
+            }
         }
 
         if (this.particles.length < this.maxParticles) {
@@ -2537,14 +2728,14 @@ class Game {
             if (dist < 800) {
                 enemy.shootTimer--;
                 if (enemy.shootTimer <= 0) {
-                    enemy.shootTimer = 40 + Math.random() * 60;
-                    const speed = 7 + Math.random() * 4;
+                    enemy.shootTimer = 30 + Math.random() * 30;
+                    const speed = 18 + Math.random() * 8;
                     this.enemyBullets.push({
                         x: enemy.x,
                         y: enemy.y,
                         vx: (dx / dist) * speed,
                         vy: (dy / dist) * speed,
-                        radius: 4,
+                        radius: 3,
                         damage: 5 + Math.floor(Math.random() * 6),
                         angle: enemy.angle,
                         life: 200
@@ -2568,10 +2759,9 @@ class Game {
     }
     
     updateObstacles() {
-        if (this.isMultiplayer) return;
         for (let i = this.obstacles.length - 1; i >= 0; i--) {
             const obs = this.obstacles[i];
-            if (obs.health <= 0) {
+            if (!this.isMultiplayer && obs.health <= 0) {
                 for (let j = 0; j < 6; j++) {
                     this.particles.push({
                         x: obs.x + (Math.random() - 0.5) * obs.radius,
@@ -2843,6 +3033,7 @@ class Game {
         try { this.drawObstacles(); } catch(e) { console.error('drawObstacles:', e); }
         try { this.drawParticles(); } catch(e) { console.error('drawParticles:', e); }
         try { this.drawPowerups(); } catch(e) { console.error('drawPowerups:', e); }
+        try { this.drawAmbientParticles(); } catch(e) { console.error('drawAmbientParticles:', e); }
         try { this.drawVehicles(); } catch(e) { console.error('drawVehicles:', e); }
         try { this.drawPlayerEffects(); } catch(e) { console.error('drawPlayerEffects:', e); }
         try { this.drawBullets(); } catch(e) { console.error('drawBullets:', e); }
@@ -2914,6 +3105,10 @@ class Game {
             this.drawMountainTerrain();
         } else if (terrain === 'rivers') {
             this.drawRiverTerrain();
+        } else if (terrain === 'volcano') {
+            this.drawVolcanoTerrain();
+        } else if (terrain === 'snow') {
+            this.drawSnowTerrain();
         } else {
             this.drawGrasslandTerrain();
         }
@@ -3077,7 +3272,100 @@ class Game {
         this.drawMapBorder();
         this.drawStars();
     }
-    
+
+    drawVolcanoTerrain() {
+        const bgColor = this.getTerrainBgColor(40, 30, 30);
+        this.ctx.fillStyle = bgColor;
+        this.ctx.fillRect(0, 0, this.mapWidth, this.mapHeight);
+
+        for (const g of this.grassPositions) {
+            this.ctx.fillStyle = `rgba(80, 60, 50, ${g.shade * 0.3})`;
+            this.ctx.fillRect(g.x, g.y, g.r, g.r);
+        }
+
+        const pulse = 0.85 + Math.sin(this.terrainTime * 2) * 0.15;
+        for (const dec of this.terrainDecorations) {
+            if (dec.type === 'lava_pool') {
+                for (let r = dec.radius; r > 0; r -= 8) {
+                    const alpha = 0.25 - (dec.radius - r) / dec.radius * 0.2;
+                    this.ctx.fillStyle = `rgba(200, 80, 20, ${alpha * pulse})`;
+                    this.ctx.beginPath();
+                    this.ctx.arc(dec.x, dec.y, r, 0, Math.PI * 2);
+                    this.ctx.fill();
+                }
+                this.ctx.fillStyle = `rgba(255, 150, 50, ${0.15 * pulse})`;
+                this.ctx.beginPath();
+                this.ctx.arc(dec.x + Math.sin(this.terrainTime * 3) * 10, dec.y + Math.cos(this.terrainTime * 2) * 8, dec.radius * 0.4, 0, Math.PI * 2);
+                this.ctx.fill();
+            }
+        }
+
+        for (const element of this.terrainElements) {
+            if (element.type === 'volcanic_rock') {
+                this.ctx.fillStyle = this.isNight ? '#222' : '#444';
+                this.ctx.beginPath();
+                this.ctx.moveTo(element.x, element.y - element.size * 0.4);
+                this.ctx.lineTo(element.x + element.size * 0.5, element.y + element.size * 0.3);
+                this.ctx.lineTo(element.x - element.size * 0.5, element.y + element.size * 0.3);
+                this.ctx.closePath();
+                this.ctx.fill();
+                this.ctx.fillStyle = this.isNight ? '#1a1a1a' : '#555';
+                this.ctx.fillRect(element.x - 4, element.y - element.size * 0.2, 8, element.size * 0.3);
+            }
+        }
+
+        this.drawMapBorder();
+        this.drawStars();
+    }
+
+    drawSnowTerrain() {
+        const bgColor = this.getTerrainBgColor(200, 210, 220);
+        this.ctx.fillStyle = bgColor;
+        this.ctx.fillRect(0, 0, this.mapWidth, this.mapHeight);
+
+        for (const g of this.grassPositions) {
+            this.ctx.fillStyle = `rgba(255, 255, 255, ${g.shade * 0.2})`;
+            this.ctx.fillRect(g.x, g.y, g.r, g.r);
+        }
+
+        for (const element of this.terrainElements) {
+            this.ctx.save();
+            if (element.type === 'pine') {
+                const s = element.size;
+                this.ctx.fillStyle = this.isNight ? '#1a2a1a' : '#2d5a27';
+                for (let t = 0; t < 3; t++) {
+                    const tw = s * (0.7 - t * 0.15);
+                    const th = s * 0.4;
+                    const ty = element.y - s * 0.2 + t * th * 0.6;
+                    this.ctx.beginPath();
+                    this.ctx.moveTo(element.x, ty - th);
+                    this.ctx.lineTo(element.x + tw, ty);
+                    this.ctx.lineTo(element.x - tw, ty);
+                    this.ctx.closePath();
+                    this.ctx.fill();
+                }
+                this.ctx.fillStyle = this.isNight ? '#111' : '#5d4037';
+                this.ctx.fillRect(element.x - 3, element.y - element.size * 0.15, 6, element.size * 0.4);
+
+                this.ctx.fillStyle = 'rgba(255,255,255,0.3)';
+                this.ctx.beginPath();
+                this.ctx.arc(element.x - element.size * 0.1, element.y - element.size * 0.55, element.size * 0.08, 0, Math.PI * 2);
+                this.ctx.fill();
+            } else if (element.type === 'snow_pile') {
+                this.ctx.fillStyle = this.isNight ? '#ccc' : '#fff';
+                this.ctx.globalAlpha = 0.4 + Math.random() * 0.2;
+                this.ctx.beginPath();
+                this.ctx.ellipse(element.x, element.y, element.size * 0.5, element.size * 0.3, 0, 0, Math.PI * 2);
+                this.ctx.fill();
+                this.ctx.globalAlpha = 1;
+            }
+            this.ctx.restore();
+        }
+
+        this.drawMapBorder();
+        this.drawStars();
+    }
+
     drawTerrainElementsGrassland() {
         for (const element of this.terrainElements) {
             this.ctx.save();
@@ -3529,6 +3817,74 @@ class Game {
             this.ctx.fill();
             
             this.ctx.restore();
+        }
+    }
+    
+    updateAmbientParticles() {
+        const terrain = this.terrainType || 'grassland';
+        if (Math.random() > 0.03) return;
+        if (this.ambientParticles.length > 20) return;
+        
+        let color, size, speed;
+        if (terrain === 'desert') {
+            color = '#f0d080';
+            size = 1 + Math.random() * 2;
+            speed = 0.3 + Math.random() * 0.5;
+        } else if (terrain === 'mountains') {
+            color = '#aaa';
+            size = 2 + Math.random() * 3;
+            speed = 0.5 + Math.random() * 1;
+        } else if (terrain === 'rivers') {
+            color = '#80c0ff';
+            size = 1 + Math.random() * 2;
+            speed = 0.5 + Math.random() * 0.8;
+        } else if (terrain === 'volcano') {
+            color = '#ff6622';
+            size = 2 + Math.random() * 3;
+            speed = 0.4 + Math.random() * 0.8;
+        } else if (terrain === 'snow') {
+            color = '#fff';
+            size = 1 + Math.random() * 2;
+            speed = 0.2 + Math.random() * 0.4;
+        } else {
+            color = '#4CAF50';
+            size = 1 + Math.random() * 2;
+            speed = 0.3 + Math.random() * 0.5;
+        }
+        
+        this.ambientParticles.push({
+            x: Math.random() * this.mapWidth,
+            y: Math.random() * this.mapHeight,
+            vx: (Math.random() - 0.5) * speed,
+            vy: -speed * 0.3 - Math.random() * 0.3,
+            radius: size,
+            color: color,
+            life: 100 + Math.random() * 100,
+            maxLife: 200,
+            alpha: 0.3 + Math.random() * 0.3
+        });
+    }
+    
+    drawAmbientParticles() {
+        if (!this.ambientParticles) return;
+        for (let i = this.ambientParticles.length - 1; i >= 0; i--) {
+            const p = this.ambientParticles[i];
+            p.x += p.vx;
+            p.y += p.vy;
+            p.life--;
+            p.alpha -= 0.002;
+            
+            if (p.life <= 0 || p.alpha <= 0 || p.y < -20) {
+                this.ambientParticles.splice(i, 1);
+                continue;
+            }
+            
+            this.ctx.globalAlpha = Math.max(0, p.alpha);
+            this.ctx.fillStyle = p.color;
+            this.ctx.beginPath();
+            this.ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+            this.ctx.fill();
+            this.ctx.globalAlpha = 1;
         }
     }
     
